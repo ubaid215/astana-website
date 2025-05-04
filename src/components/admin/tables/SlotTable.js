@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 import { useSocket } from '@/hooks/useSocket';

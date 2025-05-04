@@ -105,124 +105,132 @@ export default function ParticipationForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 max-w-md mx-auto p-6 bg-white rounded-lg shadow-md">
-      <h2 className="text-2xl font-bold text-primary text-center">Participation Form</h2>
+    <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl mx-auto p-6 bg-white rounded-xl shadow-md">
+      <h2 className="text-3xl font-bold text-primary text-center">Participation Form</h2>
       {error && <p className="text-red-600 text-center">{error}</p>}
-      <div>
-        <label htmlFor="collectorName" className="block text-sm font-medium">Collector Name</label>
-        <Input
-          id="collectorName"
-          value={formData.collectorName}
-          onChange={(e) => setFormData({ ...formData, collectorName: e.target.value })}
-          required
-        />
-      </div>
-      <div>
-        <label htmlFor="whatsappNumber" className="block text-sm font-medium">WhatsApp Number</label>
-        <Input
-          id="whatsappNumber"
-          value={formData.whatsappNumber}
-          onChange={(e) => setFormData({ ...formData, whatsappNumber: e.target.value })}
-          required
-        />
-      </div>
-      <div>
-        <label htmlFor="country" className="block text-sm font-medium">Country</label>
-        <Input
-          id="country"
-          value={formData.country}
-          onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-          required
-        />
-      </div>
-      <div>
-        <label htmlFor="cowQuality" className="block text-sm font-medium">Cow Quality</label>
-        <Select
-          value={formData.cowQuality}
-          onValueChange={(value) => setFormData({ ...formData, cowQuality: value })}
-          required
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select quality" />
-          </SelectTrigger>
-          <SelectContent>
-            {prices ? (
-              <>
-                <SelectItem value="Standard">Standard ({prices.standard.toLocaleString()}/share)</SelectItem>
-                <SelectItem value="Medium">Medium ({prices.medium.toLocaleString()}/share)</SelectItem>
-                <SelectItem value="Premium">Premium ({prices.premium.toLocaleString()}/share)</SelectItem>
-              </>
-            ) : (
-              <SelectItem value="loading">Loading prices...</SelectItem>
-            )}
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <label htmlFor="timeSlot" className="block text-sm font-medium">Time Slot (Optional)</label>
-        <Select
-          value={formData.timeSlot}
-          onValueChange={(value) => setFormData({ ...formData, timeSlot: value })}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select time slot" />
-          </SelectTrigger>
-          <SelectContent>
-            {TIME_SLOTS.map((slot) => (
-              <SelectItem key={slot} value={slot}>{slot}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <label htmlFor="day" className="block text-sm font-medium">Day</label>
-        <Select
-          value={formData.day}
-          onValueChange={(value) => setFormData({ ...formData, day: parseInt(value) })}
-          required
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select day" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="1">Day 1</SelectItem>
-            <SelectItem value="2">Day 2</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <label htmlFor="shares" className="block text-sm font-medium">Number of Shares</label>
-        <Input
-          id="shares"
-          type="number"
-          min="1"
-          value={formData.shares}
-          onChange={(e) => handleSharesChange(e.target.value)}
-          required
-        />
-      </div>
-      {formData.members.map((member, index) => (
-        <div key={index}>
-          <label htmlFor={`member-${index}`} className="block text-sm font-medium">Member {index + 1} Name</label>
+  
+      <div className="grid md:grid-cols-2 gap-4">
+        <div>
+          <label htmlFor="collectorName" className="block text-sm font-medium">Collector Name</label>
           <Input
-            id={`member-${index}`}
-            value={member}
-            onChange={(e) => handleMemberChange(index, e.target.value)}
+            id="collectorName"
+            value={formData.collectorName}
+            onChange={(e) => setFormData({ ...formData, collectorName: e.target.value })}
             required
           />
         </div>
-      ))}
-      <div>
-        <label className="block text-sm font-medium">Total Amount</label>
-        <Input
-          value={formData.totalAmount.toLocaleString()}
-          disabled
-          className="bg-gray-100"
-        />
+        <div>
+          <label htmlFor="whatsappNumber" className="block text-sm font-medium">WhatsApp Number</label>
+          <Input
+            id="whatsappNumber"
+            value={formData.whatsappNumber}
+            onChange={(e) => setFormData({ ...formData, whatsappNumber: e.target.value })}
+            required
+          />
+        </div>
+        <div>
+          <label htmlFor="country" className="block text-sm font-medium">Country</label>
+          <Input
+            id="country"
+            value={formData.country}
+            onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+            required
+          />
+        </div>
+        <div>
+          <label htmlFor="cowQuality" className="block text-sm font-medium">Cow Quality</label>
+          <Select
+            value={formData.cowQuality}
+            onValueChange={(value) => setFormData({ ...formData, cowQuality: value })}
+            required
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select quality" />
+            </SelectTrigger>
+            <SelectContent>
+              {prices ? (
+                <>
+                  <SelectItem value="Standard">Standard ({prices.standard.toLocaleString()}/share)</SelectItem>
+                  <SelectItem value="Medium">Medium ({prices.medium.toLocaleString()}/share)</SelectItem>
+                  <SelectItem value="Premium">Premium ({prices.premium.toLocaleString()}/share)</SelectItem>
+                </>
+              ) : (
+                <SelectItem value="loading">Loading prices...</SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <label htmlFor="timeSlot" className="block text-sm font-medium">Time Slot (Optional)</label>
+          <Select
+            value={formData.timeSlot}
+            onValueChange={(value) => setFormData({ ...formData, timeSlot: value })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select time slot" />
+            </SelectTrigger>
+            <SelectContent>
+              {TIME_SLOTS.map((slot) => (
+                <SelectItem key={slot} value={slot}>{slot}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <label htmlFor="day" className="block text-sm font-medium">Day</label>
+          <Select
+            value={formData.day}
+            onValueChange={(value) => setFormData({ ...formData, day: parseInt(value) })}
+            required
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select day" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1">Day 1</SelectItem>
+              <SelectItem value="2">Day 2</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <label htmlFor="shares" className="block text-sm font-medium">Number of Shares</label>
+          <Input
+            id="shares"
+            type="number"
+            min="1"
+            value={formData.shares}
+            onChange={(e) => handleSharesChange(e.target.value)}
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium">Total Amount</label>
+          <Input
+            value={formData.totalAmount.toLocaleString()}
+            disabled
+            className="bg-gray-100"
+          />
+        </div>
       </div>
-      <Button type="submit" className="w-full bg-primary text-white" disabled={loading || !prices}>
+  
+      <div className="space-y-4">
+        {formData.members.map((member, index) => (
+          <div key={index}>
+            <label htmlFor={`member-${index}`} className="block text-sm font-medium">Member {index + 1} Name</label>
+            <Input
+              id={`member-${index}`}
+              value={member}
+              onChange={(e) => handleMemberChange(index, e.target.value)}
+              required
+            />
+          </div>
+        ))}
+      </div>
+  
+      <Button type="submit" className="w-full bg-primary text-white mt-4" disabled={loading || !prices}>
         {loading ? 'Submitting...' : 'Submit'}
       </Button>
     </form>
   );
+  
 }

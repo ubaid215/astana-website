@@ -1,6 +1,6 @@
 import connectDB from '@/lib/db/mongodb';
 import User from '@/lib/db/models/User';
-import { sendVerificationEmail } from '@/lib/mailtrap';
+import { sendVerificationEmail } from '@/lib/email';
 import crypto from 'crypto';
 import { NextResponse } from 'next/server';
 
@@ -8,6 +8,14 @@ export async function POST(req) {
   try {
     await connectDB();
     const { name, email, password } = await req.json();
+
+    // Validate input
+    if (!name || !email || !password) {
+      return NextResponse.json(
+        { error: 'Name, email, and password are required' },
+        { status: 400 }
+      );
+    }
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -23,6 +31,7 @@ export async function POST(req) {
       email,
       password,
       verificationToken,
+      isVerified: false,
     });
 
     await user.save();
@@ -35,16 +44,14 @@ export async function POST(req) {
       );
     } catch (emailError) {
       console.error('Email sending failed:', emailError);
-      // Still return success but inform user to check email
       return NextResponse.json(
-        { 
-          message: 'Registration successful, but we couldn\'t send verification email. Please contact support.',
-          needsManualVerification: true
+        {
+          message: 'Registration successful, but we couldn\'t send the verification email. Please contact support.',
+          needsManualVerification: true,
         },
         { status: 201 }
       );
     }
-
   } catch (error) {
     console.error('Registration error:', error);
     return NextResponse.json(

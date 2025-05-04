@@ -1,6 +1,6 @@
-const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
-const crypto = require('crypto');
+import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 const UserSchema = new mongoose.Schema({
   name: {
@@ -19,7 +19,8 @@ const UserSchema = new mongoose.Schema({
   password: {
     type: String,
     required: [true, 'Password is required'],
-    minlength: [6, 'Password must be at least 6 characters']
+    minlength: [6, 'Password must be at least 6 characters'],
+    select: false
   },
   isVerified: {
     type: Boolean,
@@ -42,35 +43,45 @@ const UserSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Improved password hashing with error handling
-UserSchema.pre('save', async function (next) {
+// Password hashing middleware
+UserSchema.pre('save', async function(next) {
+  if (!this.isModified('password')) return next();
+  
   try {
-    if (!this.isModified('password')) return next();
-    
+    // Skip hashing if already hashed
+    if (this.password.startsWith('$2b$')) {
+      console.log('Password already hashed, skipping re-hash');
+      return next();
+    }
+
+    console.log('Hashing password for:', this.email);
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
     next();
-  } catch (error) {
-    next(error);
+  } catch (err) {
+    console.error('Hashing error:', err);
+    next(err);
   }
 });
 
-// More robust password comparison
-UserSchema.methods.comparePassword = async function (candidatePassword) {
+// Password comparison method
+UserSchema.methods.comparePassword = async function(candidatePassword) {
   try {
+    console.log('Comparing password for:', this.email);
     return await bcrypt.compare(candidatePassword, this.password);
   } catch (error) {
-    throw new Error('Password comparison failed');
+    console.error('Password comparison error:', error);
+    throw error;
   }
 };
 
-// Add a method to generate verification token
+// Generate verification token
 UserSchema.methods.generateVerificationToken = function() {
   this.verificationToken = crypto.randomBytes(20).toString('hex');
   return this.verificationToken;
 };
 
-// Add a method to generate password reset token
+// Generate password reset token
 UserSchema.methods.generatePasswordResetToken = function() {
   this.resetToken = crypto.randomBytes(20).toString('hex');
   this.resetTokenExpiry = Date.now() + 3600000; // 1 hour expiry
@@ -86,11 +97,6 @@ UserSchema.post('save', function(error, doc, next) {
   }
 });
 
-// Compile model
 const User = mongoose.models.User || mongoose.model('User', UserSchema);
 
-// Debug model
-console.log('User model compiled:', User ? 'Yes' : 'No');
-console.log('User.findOne:', typeof User.findOne);
-
-module.exports = User;
+export default User;
