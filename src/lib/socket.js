@@ -12,7 +12,7 @@ export function initSocket(server) {
     io = new Server(server, {
       path: '/socket.io',
       cors: {
-        origin: process.env.NEXTAUTH_URL || 'http://localhost:3000',
+        origin: process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3000',
         methods: ['GET', 'POST'],
         credentials: true,
       },
@@ -22,10 +22,12 @@ export function initSocket(server) {
       console.log('[Socket.io] Client connected:', socket.id);
       socket.join('admin');
       socket.join('public');
+
       socket.on('join', (room) => {
         console.log(`[Socket.io] Socket ${socket.id} joined room: ${room}`);
         socket.join(room);
       });
+
       socket.on('disconnect', () => {
         console.log('[Socket.io] Client disconnected:', socket.id);
       });

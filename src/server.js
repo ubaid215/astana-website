@@ -18,12 +18,10 @@ app.prepare().then(() => {
 
   // Initialize Socket.io
   try {
-    const io = initSocket(server);
-    io.on('connection', (socket) => {
-      console.log('[Socket.io] Client connected:', socket.id);
-    });
+    initSocket(server);
   } catch (error) {
     console.error('[Socket.io] Initialization failed:', error.message);
+    process.exit(1);
   }
 
   server.listen(port, (err) => {

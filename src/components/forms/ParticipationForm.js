@@ -93,7 +93,7 @@ export default function ParticipationForm() {
       });
       const data = await res.json();
       if (res.ok) {
-        router.push(`/confirmation?participationId=${data.participationId}`);
+        router.push('/profile'); // Changed from confirmation page to profile page
       } else {
         setError(data.error || 'Submission failed');
       }
@@ -232,5 +232,4 @@ export default function ParticipationForm() {
       </Button>
     </form>
   );
-  
 }

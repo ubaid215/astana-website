@@ -11,9 +11,22 @@ export function useSocket() {
   const [notifications, setNotifications] = useState([]);
 
   useEffect(() => {
-    const socketInstance = io(process.env.NEXTAUTH_URL || 'http://localhost:3000', {
+    // Skip Socket.io in test environments
+    if (process.env.NODE_ENV === 'test') {
+      console.log('[Socket.io Client] Skipping Socket.io initialization in test environment');
+      return;
+    }
+
+    // Dynamically determine the socket URL
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL ||
+                     (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
+    console.log('[Socket.io Client] Connecting to:', socketUrl);
+
+    const socketInstance = io(socketUrl, {
       path: '/socket.io',
       reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
       transports: ['websocket', 'polling'],
     });
 
@@ -24,7 +37,16 @@ export function useSocket() {
     });
 
     socketInstance.on('connect_error', (error) => {
-      console.error('[Socket.io Client] Connection error:', error.message);
+      console.warn('[Socket.io Client] Connection error:', {
+        message: error.message,
+        url: socketUrl,
+        type: error.type,
+        description: error.description || 'No additional details',
+      });
+    });
+
+    socketInstance.on('connect_timeout', (timeout) => {
+      console.warn('[Socket.io Client] Connection timeout:', timeout);
     });
 
     socketInstance.on('newParticipation', (participation) => {

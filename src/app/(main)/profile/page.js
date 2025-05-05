@@ -35,11 +35,16 @@ export default function ProfilePage() {
         const res = await fetch('/api/profile');
         const data = await res.json();
         if (res.ok) {
-          setParticipations(data);
+          // Check if data is an array (direct participations) or an object with participations property
+          const participationsData = Array.isArray(data) ? data : data.participations || [];
+          console.log('✅ Fetched participations:', participationsData);
+          setParticipations(participationsData);
         } else {
+          console.error('❌ API error:', data.error);
           setError(data.error || 'Failed to load profile');
         }
       } catch (err) {
+        console.error('❌ Fetch error:', err);
         setError('Server error');
       } finally {
         setLoading(false);
@@ -51,6 +56,8 @@ export default function ProfilePage() {
     }
   }, [status, router, setParticipations]);
 
+  // Rest of the component remains the same...
+  
   const handlePaymentSubmit = async (e) => {
     e.preventDefault();
     if (!paymentForm.participationId || !paymentForm.transactionId) {
@@ -65,6 +72,13 @@ export default function ProfilePage() {
       formData.append('screenshot', paymentForm.screenshot);
     }
 
+    // Log FormData contents
+    console.log('✅ Sending FormData:', {
+      participationId: paymentForm.participationId,
+      transactionId: paymentForm.transactionId,
+      screenshot: paymentForm.screenshot ? paymentForm.screenshot.name : null,
+    });
+
     try {
       const res = await fetch('/api/payment/submit', {
         method: 'POST',
@@ -76,9 +90,11 @@ export default function ProfilePage() {
         setFormSuccess(`Payment submitted successfully for Participation ID: ${paymentForm.participationId}`);
         setPaymentForm({ participationId: '', transactionId: '', screenshot: null });
       } else {
+        console.error('❌ Payment submission error:', data.error);
         setFormError(data.error || 'Failed to submit payment');
       }
     } catch (err) {
+      console.error('❌ Fetch error:', err);
       setFormError('Server error');
     }
   };
@@ -117,7 +133,7 @@ export default function ProfilePage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {participations.length > 0 ? (
+                {Array.isArray(participations) && participations.length > 0 ? (
                   participations.map((p) => (
                     <TableRow key={p._id}>
                       <TableCell>
@@ -173,11 +189,17 @@ export default function ProfilePage() {
                     <SelectValue placeholder="Select Participation ID" />
                   </SelectTrigger>
                   <SelectContent>
-                    {participations.map((p) => (
-                      <SelectItem key={p._id} value={p._id}>
-                        {p._id} ({p.collectorName}, {p.cowQuality})
+                    {Array.isArray(participations) && participations.length > 0 ? (
+                      participations.map((p) => (
+                        <SelectItem key={p._id} value={p._id}>
+                          {p._id} ({p.collectorName}, {p.cowQuality})
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="" disabled>
+                        No participations available
                       </SelectItem>
-                    ))}
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -224,7 +246,7 @@ export default function ProfilePage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {participations.length > 0 ? (
+                {Array.isArray(participations) && participations.length > 0 ? (
                   participations.map((p) => (
                     <TableRow key={p._id}>
                       <TableCell>{p._id}</TableCell>

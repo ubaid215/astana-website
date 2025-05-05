@@ -10,7 +10,8 @@ export const authOptions = {
       name: 'Credentials',
       credentials: {
         email: { label: 'Email', type: 'email' },
-        password: { label: 'Password', type: 'password' }
+        password: { label: 'Password', type: 'password' },
+        isAdmin: { label: 'Is Admin', type: 'hidden' }
       },
       async authorize(credentials) {
         try {
@@ -22,7 +23,7 @@ export const authOptions = {
 
           await connectDB();
           const user = await User.findOne({ email: credentials.email }).select('+password');
-          
+
           if (!user) {
             console.log('❌ User not found in database');
             return null;
@@ -50,9 +51,14 @@ export const authOptions = {
             throw new Error('Please verify your email first');
           }
 
-          if (credentials.isAdmin && !user.isAdmin) {
+          if (credentials.isAdmin === 'true' && !user.isAdmin) {
             console.log('⛔ Admin access denied for non-admin user');
             throw new Error('Admin access denied');
+          }
+
+          if (credentials.isAdmin === 'false' && user.isAdmin) {
+            console.log('⛔ User access denied for admin user');
+            throw new Error('Use the admin login page for admin accounts');
           }
 
           console.log('✅ Authentication successful');
@@ -71,7 +77,7 @@ export const authOptions = {
   ],
   session: {
     strategy: 'jwt',
-    maxAge: 30 * 24 * 60 * 60, // 30 days
+    maxAge: 30 * 24 * 60 * 60 // 30 days
   },
   callbacks: {
     async jwt({ token, user }) {
@@ -87,11 +93,22 @@ export const authOptions = {
         session.user.isAdmin = token.isAdmin;
       }
       return session;
+    },
+    async redirect({ url, baseUrl, user }) {
+      // Redirect admins to admin dashboard
+      if (user?.isAdmin) {
+        return url.startsWith(baseUrl) && url.includes('/admin') ? url : `${baseUrl}/admin/dashboard`;
+      }
+      // Redirect users to user dashboard or requested URL
+      if (url.startsWith(baseUrl)) {
+        return url.includes('/admin') ? `${baseUrl}/dashboard` : url;
+      }
+      return `${baseUrl}/`;
     }
   },
   pages: {
-    signIn: '/admin/login',
-    error: '/admin/login'
+    signIn: '/login',
+    error: '/login'
   },
   debug: process.env.NODE_ENV === 'development',
   secret: process.env.NEXTAUTH_SECRET

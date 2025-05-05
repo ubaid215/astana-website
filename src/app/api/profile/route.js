@@ -15,7 +15,8 @@ export async function GET(req) {
       .sort({ createdAt: -1 })
       .populate('slotId', 'timeSlot day cowQuality country');
 
-    return NextResponse.json(participations, { status: 200 });
+    // Return participations in an object with a "participations" key
+    return NextResponse.json({ participations }, { status: 200 });
   } catch (error) {
     console.error('Profile fetch error:', {
       message: error.message,

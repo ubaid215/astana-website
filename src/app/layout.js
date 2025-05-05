@@ -5,7 +5,7 @@ import SessionProviderWrapper from '@/components/providers/SessionProviderWrappe
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-  title: 'Your App Title',
+  title: 'Astana Aliya ',
   description: 'Your app description',
 };
 
