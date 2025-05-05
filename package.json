@@ -26,7 +26,6 @@
     "clsx": "^2.1.1",
     "dotenv": "^16.5.0",
     "fontkit": "^2.0.4",
-    "formidable": "^3.5.4",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.507.0",
     "mongodb": "^6.16.0",

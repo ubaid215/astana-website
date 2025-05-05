@@ -1,4 +1,5 @@
 import { Server } from 'socket.io';
+import http from 'http';
 
 let io;
 
@@ -44,7 +45,7 @@ export function initSocket(server) {
 export function getIO() {
   if (!io) {
     console.warn('[Socket.io] Not initialized yet');
-    return null;
+    return null; // Rely on server.js initialization
   }
   return io;
 }

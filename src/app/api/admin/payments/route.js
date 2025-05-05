@@ -18,7 +18,7 @@ export async function GET(req) {
 
     return NextResponse.json(participations, { status: 200 });
   } catch (error) {
-    console.error('Fetch payments error:', {
+    console.error('[Admin Payments API] Fetch payments error:', {
       message: error.message,
       stack: error.stack,
     });
@@ -50,11 +50,16 @@ export async function PATCH(req) {
 
     // Emit Socket.io event
     const io = getIO();
-    io.to('public').emit('paymentUpdate', participation);
+    if (io) {
+      io.to('public').emit('paymentUpdate', participation);
+      console.log('[Admin Payments API] Socket.io paymentUpdate emitted:', { participationId });
+    } else {
+      console.warn('[Admin Payments API] Socket.io not initialized, skipping paymentUpdate');
+    }
 
     return NextResponse.json({ message: 'Payment status updated' }, { status: 200 });
   } catch (error) {
-    console.error('Update payment status error:', {
+    console.error('[Admin Payments API] Update payment status error:', {
       message: error.message,
       stack: error.stack,
     });

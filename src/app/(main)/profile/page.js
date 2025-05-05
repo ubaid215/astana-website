@@ -35,7 +35,6 @@ export default function ProfilePage() {
         const res = await fetch('/api/profile');
         const data = await res.json();
         if (res.ok) {
-          // Check if data is an array (direct participations) or an object with participations property
           const participationsData = Array.isArray(data) ? data : data.participations || [];
           console.log('✅ Fetched participations:', participationsData);
           setParticipations(participationsData);
@@ -56,8 +55,6 @@ export default function ProfilePage() {
     }
   }, [status, router, setParticipations]);
 
-  // Rest of the component remains the same...
-  
   const handlePaymentSubmit = async (e) => {
     e.preventDefault();
     if (!paymentForm.participationId || !paymentForm.transactionId) {
@@ -72,7 +69,6 @@ export default function ProfilePage() {
       formData.append('screenshot', paymentForm.screenshot);
     }
 
-    // Log FormData contents
     console.log('✅ Sending FormData:', {
       participationId: paymentForm.participationId,
       transactionId: paymentForm.transactionId,
