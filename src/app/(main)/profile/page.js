@@ -120,6 +120,7 @@ export default function ProfilePage() {
                 <TableRow>
                   <TableHead>Participation ID</TableHead>
                   <TableHead>Collector Name</TableHead>
+                  <TableHead>Members</TableHead>
                   <TableHead>Cow Quality</TableHead>
                   <TableHead>Day</TableHead>
                   <TableHead>Time Slot</TableHead>
@@ -146,6 +147,9 @@ export default function ProfilePage() {
                         </div>
                       </TableCell>
                       <TableCell>{p.collectorName}</TableCell>
+                      <TableCell>
+                        {Array.isArray(p.members) && p.members.length > 0 ? p.members.join(', ') : 'N/A'}
+                      </TableCell>
                       <TableCell>{p.cowQuality}</TableCell>
                       <TableCell>Day {p.day}</TableCell>
                       <TableCell>{p.slotId?.timeSlot || 'Not Assigned'}</TableCell>
@@ -156,7 +160,7 @@ export default function ProfilePage() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center">
+                    <TableCell colSpan={9} className="text-center">
                       No participations yet
                     </TableCell>
                   </TableRow>
@@ -188,7 +192,10 @@ export default function ProfilePage() {
                     {Array.isArray(participations) && participations.length > 0 ? (
                       participations.map((p) => (
                         <SelectItem key={p._id} value={p._id}>
-                          {p._id} ({p.collectorName}, {p.cowQuality})
+                          {p._id} ({p.collectorName}, {p.cowQuality}
+                          {Array.isArray(p.members) && p.members.length > 0
+                            ? `, Members: ${p.members.join(', ')}`
+                            : ''})
                         </SelectItem>
                       ))
                     ) : (

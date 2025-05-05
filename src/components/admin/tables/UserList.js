@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
@@ -12,6 +12,7 @@ export default function UserList({ initialParticipations, currentPage, totalPage
           <TableRow>
             <TableHead>User</TableHead>
             <TableHead>Collector Name</TableHead>
+            <TableHead>Members</TableHead>
             <TableHead>Cow Quality</TableHead>
             <TableHead>Day</TableHead>
             <TableHead>Time Slot</TableHead>
@@ -29,6 +30,9 @@ export default function UserList({ initialParticipations, currentPage, totalPage
                   {p.userId?.name} ({p.userId?.email})
                 </TableCell>
                 <TableCell>{p.collectorName}</TableCell>
+                <TableCell>
+                  {Array.isArray(p.members) && p.members.length > 0 ? p.members.join(', ') : 'N/A'}
+                </TableCell>
                 <TableCell>{p.cowQuality}</TableCell>
                 <TableCell>Day {p.day}</TableCell>
                 <TableCell>{p.slotId?.timeSlot || 'Not Assigned'}</TableCell>
@@ -40,7 +44,7 @@ export default function UserList({ initialParticipations, currentPage, totalPage
             ))
           ) : (
             <TableRow>
-              <TableCell colSpan={9} className="text-center">
+              <TableCell colSpan={10} className="text-center">
                 No participations found
               </TableCell>
             </TableRow>
