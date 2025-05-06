@@ -13,7 +13,7 @@ export function initSocket(server) {
     io = new Server(server, {
       path: '/socket.io',
       cors: {
-        origin: process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3000',
+        origin: process.env.NEXT_PUBLIC_SOCKET_URL,
         methods: ['GET', 'POST'],
         credentials: true,
       },
