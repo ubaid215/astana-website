@@ -1,5 +1,5 @@
 import Hero from '@/components/layout/Hero';
-import PopupCard from '@/components/PopupCard'; // New import
+import PopupCard from '@/components/PopupCard';
 import { Button } from '@/components/ui/Button';
 import Link from 'next/link';
 import { 
@@ -71,8 +71,8 @@ export default function HomePage() {
           {/* Right side - Content */}
           <div className="space-y-8">
             <div>
-              <h2 className="text-3xl md:text-4xl font-bold text-primary mb-2">Qurbani in Allah's Name, Delivered with Love</h2>
-              <p className="text-lg text-gray-600">Empowering Eid ul Adha Participation & Distribution with Meaning and Impact</p>
+              <h2 className="text-3xl md:text-4xl font-bold text-primary mb-2">Qurbani in Allah&apos;s Name, Delivered with Love</h2>
+              <p className="text-lg text-gray-600">Empowering Eid ul Adha Participation &amp; Distribution with Meaning and Impact</p>
             </div>
             
             <div className="space-y-6">
@@ -140,7 +140,7 @@ export default function HomePage() {
                 <div className="bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center mb-4 mx-auto">
                   <FaHandHoldingHeart className="text-3xl text-primary" />
                 </div>
-                <h3 className="text-xl font-semibold text-center mb-3">Charity & Donation</h3>
+                <h3 className="text-xl font-semibold text-center mb-3">Charity &amp; Donation</h3>
                 <p className="text-gray-600 text-center">Facilitating zakat, sadaqah, and other charitable giving to help those in need within our community and beyond.</p>
               </div>
             </div>
@@ -152,7 +152,7 @@ export default function HomePage() {
                   <FaBookOpen className="text-3xl text-primary" />
                 </div>
                 <h3 className="text-xl font-semibold text-center mb-3">Quran Learning</h3>
-                <p className="text-gray-600 text-center">Offering Quran recitation, memorization, and tafsir classes for all ages to deepen understanding of Allah's words.</p>
+                <p className="text-gray-600 text-center">Offering Quran recitation, memorization, and tafsir classes for all ages to deepen understanding of Allah&apos;s words.</p>
               </div>
             </div>
             
@@ -162,7 +162,7 @@ export default function HomePage() {
                 <div className="bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center mb-4 mx-auto">
                   <FaScroll className="text-3xl text-primary" />
                 </div>
-                <h3 className="text-xl font-semibold text-center mb-3">Hadith & Sunnah</h3>
+                <h3 className="text-xl font-semibold text-center mb-3">Hadith &amp; Sunnah</h3>
                 <p className="text-gray-600 text-center">Educational programs focused on the teachings and traditions of Prophet Muhammad (PBUH) to guide our daily lives.</p>
               </div>
             </div>

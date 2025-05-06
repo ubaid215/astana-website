@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import connectDB from '@/lib/db/mongodb';
 import Newsletter from '@/lib/db/models/Newsletter';
+import Link from 'next/link';
 
 export default function NewsletterConfirmPage({ searchParams }) {
   const [message, setMessage] = useState('');
@@ -36,7 +37,7 @@ export default function NewsletterConfirmPage({ searchParams }) {
         {message && <p className="text-center text-green-600">{message}</p>}
         {error && <p className="text-center text-red-600">{error}</p>}
         <p className="mt-4 text-center text-sm">
-          <a href="/" className="text-primary hover:underline">Back to Home</a>
+          <Link href="/" className="text-primary hover:underline">Back to Home</Link>
         </p>
       </div>
     </div>
