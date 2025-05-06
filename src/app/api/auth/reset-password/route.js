@@ -1,6 +1,6 @@
 import connectDB from '@/lib/db/mongodb';
 import User from '@/lib/db/models/User';
-import { sendPasswordResetEmail } from '@/lib/mailtrap';
+import { sendPasswordResetEmail } from '@/lib/email';
 import crypto from 'crypto';
 
 export async function POST(req) {

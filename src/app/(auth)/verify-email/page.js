@@ -46,7 +46,7 @@ export default function VerifyEmailPage({ searchParams }) {
         {message && <p className="text-center text-green-600">{message}</p>}
         {error && <p className="text-center text-red-600">{error}</p>}
         <div className="mt-4 text-center">
-          <Button asChild variant="link" className="text-primary">
+          <Button asChild variant="link" className="text-white cursor-pointer">
             <Link href="/login">Back to Login</Link>
           </Button>
         </div>

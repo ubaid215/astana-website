@@ -13,19 +13,19 @@ export async function GET(req) {
     }
 
     // Find user with matching verification token
-    const user = await User.findOne({
-      emailVerificationToken: token,
-      emailVerificationExpires: { $gt: new Date() },
-    });
+    const user = await User.findOne({ verificationToken: token });
 
     if (!user) {
-      return NextResponse.json({ error: 'Invalid or expired token' }, { status: 400 });
+      return NextResponse.json({ error: 'Invalid token' }, { status: 400 });
     }
 
     // Update user to mark email as verified
-    user.emailVerified = true;
-    user.emailVerificationToken = null;
-    user.emailVerificationExpires = null;
+    if (user.pendingEmail) {
+      user.email = user.pendingEmail;
+      user.pendingEmail = null;
+    }
+    user.isVerified = true;
+    user.verificationToken = null;
     await user.save();
 
     return NextResponse.json({ message: 'Email verified successfully' }, { status: 200 });

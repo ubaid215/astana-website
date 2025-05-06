@@ -108,7 +108,7 @@ export default function ParticipationForm() {
     <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl mx-auto p-6 bg-white rounded-xl shadow-md">
       <h2 className="text-3xl font-bold text-primary text-center">Participation Form</h2>
       {error && <p className="text-red-600 text-center">{error}</p>}
-  
+
       <div className="grid md:grid-cols-2 gap-4">
         <div>
           <label htmlFor="collectorName" className="block text-sm font-medium">Collector Name</label>
@@ -179,12 +179,14 @@ export default function ParticipationForm() {
         <div>
           <label htmlFor="day" className="block text-sm font-medium">Day</label>
           <Select
-            value={formData.day}
-            onValueChange={(value) => setFormData({ ...formData, day: parseInt(value) })}
+            value={formData.day?.toString()}
+            onValueChange={(value) =>
+              setFormData({ ...formData, day: parseInt(value) })
+            }
             required
           >
             <SelectTrigger>
-              <SelectValue placeholder="Select day" />
+              <SelectValue placeholder="Select day" value={formData.day?.toString()} />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="1">Day 1</SelectItem>
@@ -192,6 +194,7 @@ export default function ParticipationForm() {
             </SelectContent>
           </Select>
         </div>
+
         <div>
           <label htmlFor="shares" className="block text-sm font-medium">Number of Shares</label>
           <Input
@@ -212,11 +215,11 @@ export default function ParticipationForm() {
           />
         </div>
       </div>
-  
+
       <div className="space-y-4">
         {formData.members.map((member, index) => (
           <div key={index}>
-            <label htmlFor={`member-${index}`} className="block text-sm font-medium">Member {index + 1} Name</label>
+            <label htmlFor={`member-${index}`} className="block text-sm font-medium">Name Of Qurbani Recipient: {index + 1} </label>
             <Input
               id={`member-${index}`}
               value={member}
@@ -226,7 +229,7 @@ export default function ParticipationForm() {
           </div>
         ))}
       </div>
-  
+
       <Button type="submit" className="w-full bg-primary text-white mt-4" disabled={loading || !prices}>
         {loading ? 'Submitting...' : 'Submit'}
       </Button>

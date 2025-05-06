@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { signOut } from 'next-auth/react';
 import { Button } from '@/components/ui/Button';
 import { 
   FaTachometerAlt, 
@@ -13,24 +14,23 @@ import {
   FaMoneyBill,
   FaBars,
   FaTimes,
+  FaSignOutAlt,
 } from 'react-icons/fa';
 import { MenuIcon } from 'lucide-react';
 
 export default function Sidebar() {
   const pathname = usePathname();
+  // Default to desktop state to match server render
   const [isOpen, setIsOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
 
-  // Check if we're on mobile when component mounts and on window resize
+  // Update mobile state and sidebar visibility only on client side
   useEffect(() => {
     const checkIsMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-      // Close sidebar by default on mobile
-      if (window.innerWidth < 768) {
-        setIsOpen(false);
-      } else {
-        setIsOpen(true);
-      }
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      // Close sidebar on mobile, open on desktop
+      setIsOpen(!mobile);
     };
 
     // Initial check
@@ -53,6 +53,10 @@ export default function Sidebar() {
   ];
 
   const toggleSidebar = () => setIsOpen(!isOpen);
+
+  const handleLogout = () => {
+    signOut({ callbackUrl: '/admin/login' });
+  };
 
   return (
     <>
@@ -88,8 +92,8 @@ export default function Sidebar() {
         </div>
 
         {/* Navigation */}
-        <nav className="mt-4">
-          <ul className="space-y-2 px-2">
+        <nav className="mt-4 flex flex-col h-[calc(100%-5rem)]">
+          <ul className="space-y-2 px-2 flex-1">
             {navItems.map((item) => (
               <li key={item.name}>
                 <Link href={item.href}>
@@ -108,6 +112,21 @@ export default function Sidebar() {
               </li>
             ))}
           </ul>
+          
+          {/* Logout Button */}
+          <div className="mt-auto px-2 pb-4">
+            <Button
+              variant="ghost"
+              className={`w-full flex items-center ${isOpen ? 'justify-start' : 'justify-center'} 
+                hover:bg-gray-700 transition-all duration-200 ease-in-out`}
+              onClick={handleLogout}
+            >
+              <FaSignOutAlt className={`${isOpen ? 'mr-2' : 'mx-auto'} w-5 h-5`} />
+              <span className={`transition-opacity duration-200 ${isOpen ? 'opacity-100' : 'opacity-0 hidden md:hidden'}`}>
+                Logout
+              </span>
+            </Button>
+          </div>
         </nav>
       </div>
 

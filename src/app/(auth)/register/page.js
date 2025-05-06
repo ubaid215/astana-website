@@ -2,10 +2,12 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Eye, EyeOff } from 'lucide-react';
 
 export default function RegisterPage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -39,6 +41,10 @@ export default function RegisterPage() {
     }
   };
 
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="max-w-md w-full p-6 bg-white rounded-lg shadow-md">
@@ -52,9 +58,27 @@ export default function RegisterPage() {
             <label htmlFor="email" className="block text-sm font-medium">Email</label>
             <Input id="email" name="email" type="email" required className="w-full" />
           </div>
-          <div>
+          <div className="relative">
             <label htmlFor="password" className="block text-sm font-medium">Password</label>
-            <Input id="password" name="password" type="password" required className="w-full" />
+            <Input 
+              id="password" 
+              name="password" 
+              type={showPassword ? "text" : "password"} 
+              required 
+              className="w-full pr-10" 
+            />
+            <button
+              type="button"
+              className="absolute inset-y-0 right-0 pr-3 flex items-center pt-5"
+              onClick={togglePasswordVisibility}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? (
+                <EyeOff className="h-5 w-5 text-gray-500" />
+              ) : (
+                <Eye className="h-5 w-5 text-gray-500" />
+              )}
+            </button>
           </div>
           <Button type="submit" className="w-full bg-primary text-white">Register</Button>
         </form>

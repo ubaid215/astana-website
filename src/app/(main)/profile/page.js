@@ -219,12 +219,13 @@ export default function ProfilePage() {
               </div>
               <div>
                 <label htmlFor="screenshot" className="block text-sm font-medium">
-                  Screenshot (Optional)
+                  Screenshot of payment
                 </label>
                 <Input
                   id="screenshot"
                   type="file"
                   accept="image/jpeg,image/png"
+                  required
                   onChange={(e) => setPaymentForm({ ...paymentForm, screenshot: e.target.files[0] })}
                 />
               </div>

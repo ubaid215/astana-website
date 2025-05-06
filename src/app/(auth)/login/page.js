@@ -6,12 +6,14 @@ import { signIn } from 'next-auth/react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
+import { Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -23,7 +25,6 @@ export default function LoginPage() {
     setError('');
 
     try {
-      // Call user login API
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -36,7 +37,6 @@ export default function LoginPage() {
         throw new Error(data.error || 'User authentication failed');
       }
 
-      // Sign in with NextAuth
       const result = await signIn('credentials', {
         redirect: false,
         email,
@@ -66,13 +66,15 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="max-w-md w-full p-6 bg-white rounded-lg shadow-md">
+      <div className="max-w-md w-full p-6 bg-white/30 backdrop-blur-md rounded-lg shadow-md">
         <h1 className="text-2xl font-bold text-center mb-6">User Login</h1>
+
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded">
             {error}
           </div>
         )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <Label htmlFor="email">Email</Label>
@@ -85,17 +87,29 @@ export default function LoginPage() {
               className="mt-1"
             />
           </div>
+
           <div>
             <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="mt-1"
-            />
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="mt-1 pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                aria-label="Toggle password visibility"
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
+
           <Button
             type="submit"
             disabled={loading}
@@ -125,23 +139,12 @@ export default function LoginPage() {
                 </svg>
                 Authenticating...
               </span>
-            ) : 'Login'}
+            ) : (
+              'Login'
+            )}
           </Button>
         </form>
-        <div className="mt-4 space-y-2">
-          <Button
-            onClick={() => signIn('google', { callbackUrl })}
-            className="w-full bg-red-600 text-white"
-          >
-            Login with Google
-          </Button>
-          <Button
-            onClick={() => signIn('facebook', { callbackUrl })}
-            className="w-full bg-blue-600 text-white"
-          >
-            Login with Facebook
-          </Button>
-        </div>
+
         <p className="mt-4 text-center text-sm">
           <a href="/forgot-password" className="text-primary hover:underline">
             Forgot Password?
@@ -153,12 +156,7 @@ export default function LoginPage() {
             Register
           </a>
         </p>
-        <p className="mt-2 text-center text-sm">
-          Admin?{' '}
-          <a href="/admin/login" className="text-primary hover:underline">
-            Login as Admin
-          </a>
-        </p>
+        
       </div>
     </div>
   );

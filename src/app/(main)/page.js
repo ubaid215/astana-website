@@ -1,4 +1,5 @@
 import Hero from '@/components/layout/Hero';
+import PopupCard from '@/components/PopupCard'; // New import
 import { Button } from '@/components/ui/Button';
 import Link from 'next/link';
 import { 
@@ -27,6 +28,9 @@ export default function HomePage() {
     <div className="bg-background">
       <Hero />
       
+      {/* Popup Card */}
+      <PopupCard />
+
       {/* New Bento-style Section */}
       <section className="py-16 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
@@ -39,7 +43,6 @@ export default function HomePage() {
                 alt="Eid celebration" 
                 fill
                 sizes="(max-width: 768px) 100vw, 50vw"
-                
                 className="object-cover transform transition-transform hover:scale-105 duration-300"
               />
             </div>
@@ -194,10 +197,6 @@ export default function HomePage() {
           </div>
         </div>
       </section>
-      
-     
-      
-      
     </div>
   );
 }

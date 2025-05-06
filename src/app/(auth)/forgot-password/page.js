@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -35,7 +37,7 @@ export default function ForgotPasswordPage({ searchParams }) {
             <label htmlFor="email" className="block text-sm font-medium">Email</label>
             <Input id="email" type="email" required className="w-full" />
           </div>
-          <Button type="submit" className="w-full bg-primary text-white">Send Reset Link</Button>
+          <Button type="submit" className="w-full bg-primary text-white cursor-pointer">Send Reset Link</Button>
         </form>
         {message && <p className="mt-4 text-center text-green-600">{message}</p>}
         {error && <p className="mt-4 text-center text-red-600">{error}</p>}

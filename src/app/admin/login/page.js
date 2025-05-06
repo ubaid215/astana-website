@@ -6,12 +6,14 @@ import { signIn } from 'next-auth/react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
+import { Eye, EyeOff } from 'lucide-react'; // You can change this if you're using a different icon library
 
 export default function AdminLoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -23,68 +25,42 @@ export default function AdminLoginPage() {
     setError('');
 
     try {
-      // Call admin login API
-      const apiUrl = '/api/auth/admin-login';
-      console.log('[Client] Fetching admin login API:', apiUrl, { email });
-
-      const response = await fetch(apiUrl, {
+      const response = await fetch('/api/auth/admin-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email, password }),
       });
 
-      console.log('[Client] Response received:', {
-        status: response.status,
-        statusText: response.statusText,
-        ok: response.ok,
-        headers: Object.fromEntries([...response.headers.entries()]),
-        url: response.url
-      });
-
-      // Get response text
       const responseText = await response.text();
-      console.log('[Client] Response body preview:', responseText.substring(0, 200), 'Length:', responseText.length);
 
-      // Check for HTML response
       if (responseText.trim().startsWith('<!DOCTYPE') || responseText.trim().startsWith('<html')) {
-        console.error('[Client] Received HTML instead of JSON:', responseText.substring(0, 500));
         throw new Error('Server error: Received HTML instead of JSON. Check server logs.');
       }
 
-      // Parse JSON
       let data;
       try {
         data = responseText ? JSON.parse(responseText) : {};
-      } catch (parseError) {
-        console.error('[Client] Failed to parse response as JSON:', parseError, { responseText });
+      } catch {
         throw new Error('Invalid server response format');
       }
 
       if (!response.ok) {
-        console.error('[Client] Admin login API error response:', {
-          status: response.status,
-          statusText: response.statusText,
-          data
-        });
-        throw new Error(data?.error || `Server error: ${response.status} ${response.statusText}`);
+        throw new Error(data?.error || `Server error: ${response.status}`);
       }
 
       if (data.error) {
         throw new Error(data.error);
       }
 
-      // Sign in with NextAuth
-      console.log('[Client] Signing in with NextAuth...');
       const result = await signIn('credentials', {
         redirect: false,
         email,
         password,
         isAdmin: 'true',
-        callbackUrl
+        callbackUrl,
       });
 
       if (result?.error) {
-        console.error('[Client] NextAuth signIn error:', result.error);
         if (result.error === 'CredentialsSignin') {
           throw new Error('Invalid email or password');
         } else if (result.error.includes('Admin access denied')) {
@@ -94,7 +70,6 @@ export default function AdminLoginPage() {
         }
       }
 
-      console.log('[Client] Redirecting to:', callbackUrl);
       router.push(callbackUrl);
     } catch (err) {
       setError(err.message);
@@ -127,21 +102,33 @@ export default function AdminLoginPage() {
               className="mt-1"
             />
           </div>
+
           <div>
             <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="mt-1"
-            />
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="mt-1 pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-2 flex items-center text-gray-500 hover:text-gray-700"
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
+
           <Button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+            className="w-full bg-primary hover:bg-blue-700 text-white"
           >
             {loading ? (
               <span className="flex items-center justify-center">

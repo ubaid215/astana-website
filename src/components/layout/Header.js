@@ -106,7 +106,7 @@ export default function Header() {
             <FaSignInAlt className="text-lg" />
             <span>Login</span>
           </Link>
-          <Link href="/signup" className={getLinkStyle('/signup')}>
+          <Link href="/register" className={getLinkStyle('/register')}>
             <FaUserPlus className="text-lg" />
             <span>Sign Up</span>
           </Link>
@@ -118,7 +118,7 @@ export default function Header() {
   return (
     <header className="bg-primary text-white py-4 px-6 shadow-md relative">
       <div className="container mx-auto flex justify-between items-center">
-        <Link href="/" className="text-2xl font-bold">Khanqah Saifia Murshidabad</Link>
+        <Link href="/" className="text-2xl font-bold">Astana Aliya Murshidabad</Link>
         
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center space-x-6">

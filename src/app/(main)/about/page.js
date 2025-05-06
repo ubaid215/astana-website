@@ -38,7 +38,7 @@ export default function AboutPage() {
             </p>
           </div>
           <div className="md:w-1/2 rounded-xl overflow-hidden shadow-lg">
-            <img src="/api/placeholder/600/400" alt="Our mission" className="w-full h-full object-cover" />
+            <img src="/images/about-img.jpg" alt="Our mission" className="w-full h-full object-cover" />
           </div>
         </div>
 

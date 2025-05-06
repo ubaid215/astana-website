@@ -38,6 +38,13 @@ const UserSchema = new mongoose.Schema({
   },
   resetTokenExpiry: {
     type: Date
+  },
+  pendingEmail: {
+    type: String,
+    default: null,
+    lowercase: true,
+    trim: true,
+    match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please fill a valid email address']
   }
 }, {
   timestamps: true
