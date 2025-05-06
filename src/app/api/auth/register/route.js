@@ -32,7 +32,7 @@ export async function POST(req) {
       email,
       password,
       verificationToken,
-      isVerified: false,
+      isVerified: true,
     });
 
     await user.save();

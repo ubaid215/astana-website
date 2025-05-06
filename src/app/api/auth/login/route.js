@@ -12,21 +12,16 @@ export async function validateUserCredentials(email, password) {
 
   const user = await User.findOne({ email }).select('+password');
   if (!user) {
-    return { error: 'No user found with this email', status: 401 };
+    return { error: 'Invalid email or password', status: 401 };
   }
-
-  console.log('Validating user:', user.email);
 
   try {
     const isValid = await user.comparePassword(password);
     if (!isValid) {
-      return { error: 'Invalid password', status: 401 };
+      return { error: 'Invalid email or password', status: 401 };
     }
 
-    if (!user.isVerified) {
-      return { error: 'Please verify your email first', status: 401 };
-    }
-
+    // Removed email verification check
     if (user.isAdmin) {
       return { error: 'Admin accounts cannot use user login', status: 403 };
     }
@@ -52,7 +47,6 @@ export async function POST(req) {
 
     const existingSession = await getServerSession(authOptions);
     if (existingSession?.user && !existingSession.user.isAdmin) {
-      console.log('Existing user session found:', existingSession.user.email);
       return Response.json({
         success: true,
         message: 'Already authenticated',
@@ -71,14 +65,9 @@ export async function POST(req) {
     return Response.json({
       success: true,
       user: result.user
-    }, {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
+    }, { status: 200 });
   } catch (error) {
-    console.error('User login error:', error);
+    console.error('Login error:', error);
     return Response.json({ error: 'Server error' }, { status: 500 });
   }
 }
