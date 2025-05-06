@@ -33,6 +33,9 @@ const UserSchema = new mongoose.Schema({
   verificationToken: {
     type: String
   },
+  verificationTokenExpiry: {
+    type: Date
+  },
   resetToken: {
     type: String
   },
@@ -84,15 +87,18 @@ UserSchema.methods.comparePassword = async function(candidatePassword) {
 
 // Generate verification token
 UserSchema.methods.generateVerificationToken = function() {
-  this.verificationToken = crypto.randomBytes(20).toString('hex');
-  return this.verificationToken;
+  const token = crypto.randomBytes(20).toString('hex');
+  this.verificationToken = token;
+  this.verificationTokenExpiry = Date.now() + 24 * 60 * 60 * 1000; // 24 hours expiry
+  return token;
 };
 
 // Generate password reset token
 UserSchema.methods.generatePasswordResetToken = function() {
-  this.resetToken = crypto.randomBytes(20).toString('hex');
+  const token = crypto.randomBytes(20).toString('hex');
+  this.resetToken = token;
   this.resetTokenExpiry = Date.now() + 3600000; // 1 hour expiry
-  return this.resetToken;
+  return token;
 };
 
 // Handle duplicate email errors

@@ -23,7 +23,7 @@ async function registerAdmin() {
     console.log('✅ MongoDB connected successfully');
 
     console.log('\n🔍 Checking for existing admin...');
-    const existingAdmin = await User.findOne({ email: 'admin@example.com' });
+    const existingAdmin = await User.findOne({ email: 'khanqahsaifia@gmail.com' });
     if (existingAdmin) {
       console.log('ℹ️ Admin already exists');
       console.log('Admin details:', {
@@ -39,8 +39,8 @@ async function registerAdmin() {
 
     const admin = new User({
       name: 'System Admin',
-      email: 'admin@example.com',
-      password: 'Admin123!', 
+      email: 'khanqahsaifia@gmail.com',
+      password: 'Admin786@!', 
       isAdmin: true,
       isVerified: true,
     });
@@ -48,7 +48,7 @@ async function registerAdmin() {
     await admin.save();
     console.log('\n🎉 Admin registered successfully!');
     console.log('   Email:', admin.email);
-    console.log('   Password: Admin123! (change this immediately)');
+    console.log('   Password: Admin786@! (change this immediately)');
     console.log('   Hash:', admin.password); 
 
 
