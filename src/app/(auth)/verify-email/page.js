@@ -3,40 +3,64 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
+import { v4 as uuidv4 } from 'uuid';
 
 export default function VerifyEmailPage({ searchParams }) {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [token, setToken] = useState(null); // Store token in state
 
   useEffect(() => {
+    // Extract token safely inside useEffect
+    const tokenFromParams = searchParams?.token;
+    setToken(tokenFromParams); // Update state with token
+
+    const requestId = uuidv4(); // Unique ID for tracking this request
+    console.log(`[${requestId}] VerifyEmailPage loaded at ${new Date().toISOString()}`);
+    console.log(`[${requestId}] Token from URL: ${tokenFromParams}`);
+
     const verifyEmail = async () => {
-      if (!searchParams?.token) {
+      if (!tokenFromParams) {
+        console.error(`[${requestId}] No verification token provided`);
         setError('No verification token provided');
         return;
       }
 
       setLoading(true);
       try {
-        const res = await fetch(`/api/auth/verify-email?token=${searchParams.token}`);
+        console.log(`[${requestId}] Sending verification request for token: ${tokenFromParams}`);
+        const res = await fetch(`/api/auth/verify-email?token=${tokenFromParams}`);
         const data = await res.json();
+        console.log(`[${requestId}] Verification response:`, {
+          status: res.status,
+          data
+        });
+
         if (res.ok) {
+          console.log(`[${requestId}] Verification successful: ${data.message}`);
           setMessage(data.message);
           setError('');
         } else {
+          console.error(`[${requestId}] Verification failed: ${data.error || 'Unknown error'}`);
           setError(data.error || 'Verification failed');
           setMessage('');
         }
       } catch (err) {
+        console.error(`[${requestId}] Server error during verification:`, {
+          message: err.message,
+          stack: err.stack
+        });
         setError('Server error');
         setMessage('');
       } finally {
         setLoading(false);
+        console.log(`[${requestId}] Verification process completed`);
       }
     };
 
     verifyEmail();
-  }, [searchParams?.token]);
+  }, [searchParams]); 
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">

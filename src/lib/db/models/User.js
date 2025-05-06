@@ -56,7 +56,7 @@ const UserSchema = new mongoose.Schema({
 // Password hashing middleware
 UserSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
-  
+
   try {
     // Skip hashing if already hashed
     if (this.password.startsWith('$2b$')) {
@@ -96,8 +96,19 @@ UserSchema.methods.generateVerificationToken = function() {
 // Generate password reset token
 UserSchema.methods.generatePasswordResetToken = function() {
   const token = crypto.randomBytes(20).toString('hex');
+  console.log('Generated reset token:', token);
+  console.log('User document before token assignment:', {
+    email: this.email,
+    resetToken: this.resetToken,
+    resetTokenExpiry: this.resetTokenExpiry
+  });
   this.resetToken = token;
   this.resetTokenExpiry = Date.now() + 3600000; // 1 hour expiry
+  console.log('User document after token assignment:', {
+    email: this.email,
+    resetToken: this.resetToken,
+    resetTokenExpiry: new Date(this.resetTokenExpiry).toISOString()
+  });
   return token;
 };
 
