@@ -2,24 +2,26 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { v4 as uuidv4 } from 'uuid';
 
-export default function VerifyEmailPage() {
+export default function VerifyEmailPage({ searchParams }) {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const searchParams = useSearchParams();
-  const token = searchParams?.get('token');
+  const [token, setToken] = useState(null); // Store token in state
 
   useEffect(() => {
-    const requestId = uuidv4();
+    // Extract token safely inside useEffect
+    const tokenFromParams = searchParams?.token;
+    setToken(tokenFromParams); // Update state with token
+
+    const requestId = uuidv4(); // Unique ID for tracking this request
     console.log(`[${requestId}] VerifyEmailPage loaded at ${new Date().toISOString()}`);
-    console.log(`[${requestId}] Token from URL: ${token}`);
+    console.log(`[${requestId}] Token from URL: ${tokenFromParams}`);
 
     const verifyEmail = async () => {
-      if (!token) {
+      if (!tokenFromParams) {
         console.error(`[${requestId}] No verification token provided`);
         setError('No verification token provided');
         return;
@@ -27,16 +29,8 @@ export default function VerifyEmailPage() {
 
       setLoading(true);
       try {
-        console.log(`[${requestId}] Sending verification request for token: ${token}`);
-        
-        // Use absolute URL for API call to ensure it works in both environments
-        const apiUrl = `${window.location.origin}/api/auth/verify-email?token=${encodeURIComponent(token)}`;
-        console.log(`[${requestId}] API URL: ${apiUrl}`);
-        
-        const res = await fetch(apiUrl, {
-          cache: 'no-store'
-        });
-        
+        console.log(`[${requestId}] Sending verification request for token: ${tokenFromParams}`);
+        const res = await fetch(`/api/auth/verify-email?token=${tokenFromParams}`);
         const data = await res.json();
         console.log(`[${requestId}] Verification response:`, {
           status: res.status,
@@ -44,9 +38,11 @@ export default function VerifyEmailPage() {
         });
 
         if (res.ok) {
-          setMessage(data.message || 'Email verified successfully!');
+          console.log(`[${requestId}] Verification successful: ${data.message}`);
+          setMessage(data.message);
           setError('');
         } else {
+          console.error(`[${requestId}] Verification failed: ${data.error || 'Unknown error'}`);
           setError(data.error || 'Verification failed');
           setMessage('');
         }
@@ -55,7 +51,7 @@ export default function VerifyEmailPage() {
           message: err.message,
           stack: err.stack
         });
-        setError('Server error during verification');
+        setError('Server error');
         setMessage('');
       } finally {
         setLoading(false);
@@ -64,23 +60,17 @@ export default function VerifyEmailPage() {
     };
 
     verifyEmail();
-  }, [token]);
+  }, [searchParams]); 
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="max-w-md w-full p-6 bg-white rounded-lg shadow-md">
-        <h1 className="text-2xl font-bold text-center mb-6 text-primary">
-          {loading ? 'Verifying Email...' : 'Verify Email'}
-        </h1>
+        <h1 className="text-2xl font-bold text-center mb-6 text-primary">Verify Email</h1>
         {loading && <p className="text-center text-gray-600">Verifying...</p>}
-        {message && (
-          <p className="text-center text-green-600 mb-4">{message}</p>
-        )}
-        {error && (
-          <p className="text-center text-red-600 mb-4">{error}</p>
-        )}
+        {message && <p className="text-center text-green-600">{message}</p>}
+        {error && <p className="text-center text-red-600">{error}</p>}
         <div className="mt-4 text-center">
-          <Button asChild variant="default">
+          <Button asChild variant="link" className="text-white cursor-pointer">
             <Link href="/login">Back to Login</Link>
           </Button>
         </div>
