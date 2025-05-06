@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import connectDB from '@/lib/db/mongodb';
 import Price from '@/lib/db/models/Price';
 import { getIO } from '@/lib/socket';

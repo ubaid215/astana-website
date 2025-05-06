@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import connectDB from '@/lib/db/mongodb';
 import Participation from '@/lib/db/models/Participation';
 import User from '@/lib/db/models/User';
