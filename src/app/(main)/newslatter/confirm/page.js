@@ -1,4 +1,5 @@
-/* eslint-disable @next/next/no-html-link-for-pages */
+"use client";
+
 import { useEffect, useState } from 'react';
 import connectDB from '@/lib/db/mongodb';
 import Newsletter from '@/lib/db/models/Newsletter';
