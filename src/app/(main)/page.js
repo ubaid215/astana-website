@@ -1,7 +1,18 @@
 import Hero from '@/components/layout/Hero';
 import { Button } from '@/components/ui/Button';
 import Link from 'next/link';
-import { FaCheckCircle, FaUsers, FaHandHoldingHeart } from 'react-icons/fa';
+import { 
+  FaCheckCircle, 
+  FaUsers, 
+  FaHandHoldingHeart, 
+  FaHeart, 
+  FaHandsHelping, 
+  FaPrayingHands,
+  FaMosque,
+  FaBookOpen,
+  FaScroll
+} from 'react-icons/fa';
+import Image from 'next/image';
 
 console.log('Rendering HomePage');
 
@@ -15,61 +26,178 @@ export default function HomePage() {
   return (
     <div className="bg-background">
       <Hero />
-      <section className="py-12 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <h2 className="text-3xl font-bold text-center text-primary mb-8">Why Choose Us</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-          <div className="text-center p-6 bg-white rounded-lg shadow-md">
-            <FaCheckCircle className="text-4xl text-secondary mx-auto mb-4" />
-            <h3 className="text-xl font-semibold mb-2">Transparent Process</h3>
-            <p className="text-gray-600">Clear and open participation system for trust and reliability.</p>
+      
+      {/* New Bento-style Section */}
+      <section className="py-16 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+          {/* Left side - Bento Images */}
+          <div className="relative grid grid-cols-2 gap-4 h-full">
+            {/* Main large image */}
+            <div className="col-span-2 aspect-video relative rounded-xl overflow-hidden shadow-lg">
+              <Image 
+                src="/images/img1.jpg" 
+                alt="Eid celebration" 
+                fill
+                sizes="(max-width: 768px) 100vw, 50vw"
+                
+                className="object-cover transform transition-transform hover:scale-105 duration-300"
+              />
+            </div>
+            
+            {/* Two smaller images */}
+            <div className="aspect-square relative rounded-xl overflow-hidden shadow-lg">
+              <Image 
+                src="/images/img2.jpg" 
+                alt="Qurbani preparation" 
+                fill
+                sizes="(max-width: 768px) 100vw, 25vw"
+                className="object-cover transform transition-transform hover:scale-105 duration-300"
+              />
+            </div>
+            <div className="aspect-square relative rounded-xl overflow-hidden shadow-lg">
+              <Image 
+                src="/images/img3.jpg" 
+                alt="Meat distribution" 
+                fill
+                sizes="(max-width: 768px) 100vw, 25vw"
+                className="object-cover transform transition-transform hover:scale-105 duration-300"
+              />
+            </div>
           </div>
-          <div className="text-center p-6 bg-white rounded-lg shadow-md">
-            <FaUsers className="text-4xl text-secondary mx-auto mb-4" />
-            <h3 className="text-xl font-semibold mb-2">Community Driven</h3>
-            <p className="text-gray-600">Join a community dedicated to meaningful contributions.</p>
-          </div>
-          <div className="text-center p-6 bg-white rounded-lg shadow-md">
-            <FaHandHoldingHeart className="text-4xl text-secondary mx-auto mb-4" />
-            <h3 className="text-xl font-semibold mb-2">Easy Participation</h3>
-            <p className="text-gray-600">Simple and secure form to participate in Eid ul Adha.</p>
+          
+          {/* Right side - Content */}
+          <div className="space-y-8">
+            <div>
+              <h2 className="text-3xl md:text-4xl font-bold text-primary mb-2">Qurbani in Allah's Name, Delivered with Love</h2>
+              <p className="text-lg text-gray-600">Empowering Eid ul Adha Participation & Distribution with Meaning and Impact</p>
+            </div>
+            
+            <div className="space-y-6">
+              <div className="flex items-start gap-4">
+                <div className="mt-1 bg-primary/10 p-3 rounded-full">
+                  <FaHeart className="text-xl text-primary" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold mb-1">Inclusive Qurbani for All</h3>
+                  <p className="text-gray-600">We simplify the process so everyone can easily participate in the sacred act of sacrifice, regardless of location or financial limits.</p>
+                </div>
+              </div>
+              
+              <div className="flex items-start gap-4">
+                <div className="mt-1 bg-primary/10 p-3 rounded-full">
+                  <FaHandsHelping className="text-xl text-primary" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold mb-1">Meat That Reaches Where It Matters</h3>
+                  <p className="text-gray-600">Our organized distribution ensures that fresh, quality meat is delivered to families who need it most — with dignity and care.</p>
+                </div>
+              </div>
+              
+              <div className="flex items-start gap-4">
+                <div className="mt-1 bg-primary/10 p-3 rounded-full">
+                  <FaPrayingHands className="text-xl text-primary" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold mb-1">Faith-Driven, Transparent System</h3>
+                  <p className="text-gray-600">From registration to delivery, every step is designed to reflect the sincerity of your sacrifice for the sake of Allah.</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="pt-4">
+              <Button asChild className="bg-primary hover:bg-primary/90 text-white">
+                <Link href="/participation">Participate Now</Link>
+              </Button>
+            </div>
           </div>
         </div>
       </section>
-      <section className="py-12 bg-gray-100">
-        <h2 className="text-3xl font-bold text-center text-primary mb-8">How It Works</h2>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-primary mb-2">1. Register</div>
-            <p className="text-gray-600">Create an account or log in to start.</p>
+      
+      {/* Our Activities Section */}
+      <section className="py-16 bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <h2 className="text-3xl md:text-4xl font-bold text-center text-primary mb-3">Here Are Our Activities</h2>
+          <p className="text-center text-gray-600 mb-12 max-w-3xl mx-auto">Explore the various Islamic activities and programs we offer to serve our community and strengthen our faith together.</p>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Card 1 - Mosque Development */}
+            <div className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300">
+              <div className="p-6">
+                <div className="bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center mb-4 mx-auto">
+                  <FaMosque className="text-3xl text-primary" />
+                </div>
+                <h3 className="text-xl font-semibold text-center mb-3">Mosque Development</h3>
+                <p className="text-gray-600 text-center">Supporting the construction, maintenance, and improvement of mosques as vital centers for worship and community gathering.</p>
+              </div>
+            </div>
+            
+            {/* Card 2 - Charity & Donation */}
+            <div className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300">
+              <div className="p-6">
+                <div className="bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center mb-4 mx-auto">
+                  <FaHandHoldingHeart className="text-3xl text-primary" />
+                </div>
+                <h3 className="text-xl font-semibold text-center mb-3">Charity & Donation</h3>
+                <p className="text-gray-600 text-center">Facilitating zakat, sadaqah, and other charitable giving to help those in need within our community and beyond.</p>
+              </div>
+            </div>
+            
+            {/* Card 3 - Quran Learning */}
+            <div className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300">
+              <div className="p-6">
+                <div className="bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center mb-4 mx-auto">
+                  <FaBookOpen className="text-3xl text-primary" />
+                </div>
+                <h3 className="text-xl font-semibold text-center mb-3">Quran Learning</h3>
+                <p className="text-gray-600 text-center">Offering Quran recitation, memorization, and tafsir classes for all ages to deepen understanding of Allah's words.</p>
+              </div>
+            </div>
+            
+            {/* Card 4 - Hadith & Sunnah */}
+            <div className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300">
+              <div className="p-6">
+                <div className="bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center mb-4 mx-auto">
+                  <FaScroll className="text-3xl text-primary" />
+                </div>
+                <h3 className="text-xl font-semibold text-center mb-3">Hadith & Sunnah</h3>
+                <p className="text-gray-600 text-center">Educational programs focused on the teachings and traditions of Prophet Muhammad (PBUH) to guide our daily lives.</p>
+              </div>
+            </div>
+            
+            {/* Card 5 - Parent Education */}
+            <div className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300">
+              <div className="p-6">
+                <div className="bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center mb-4 mx-auto">
+                  <FaUsers className="text-3xl text-primary" />
+                </div>
+                <h3 className="text-xl font-semibold text-center mb-3">Parent Education</h3>
+                <p className="text-gray-600 text-center">Workshops and resources for parents on raising children with Islamic values in the modern world.</p>
+              </div>
+            </div>
+            
+            {/* Card 6 - Islamic Teachings */}
+            <div className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300">
+              <div className="p-6">
+                <div className="bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center mb-4 mx-auto">
+                  <FaPrayingHands className="text-3xl text-primary" />
+                </div>
+                <h3 className="text-xl font-semibold text-center mb-3">Islamic Teachings</h3>
+                <p className="text-gray-600 text-center">Regular classes and seminars on fiqh, aqeedah, and other essential Islamic knowledge for spiritual growth.</p>
+              </div>
+            </div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-primary mb-2">2. Submit Form</div>
-            <p className="text-gray-600">Fill out the participation form with your details.</p>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-primary mb-2">3. Confirm</div>
-            <p className="text-gray-600">Receive confirmation and track your participation.</p>
+          
+          <div className="text-center mt-10">
+            <Button asChild className="bg-primary hover:bg-primary/90 text-white">
+              <Link href="/activities">View All Activities</Link>
+            </Button>
           </div>
         </div>
       </section>
-      <section className="py-12 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <h2 className="text-3xl font-bold text-center text-primary mb-8">Testimonials</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-          <div className="p-6 bg-white rounded-lg shadow-md">
-            <p className="text-gray-600 mb-4">This platform made my Eid ul Adha participation so easy and transparent!</p>
-            <p className="font-semibold">Ahmed, Saudi Arabia</p>
-          </div>
-          <div className="p-6 bg-white rounded-lg shadow-md">
-            <p className="text-gray-600 mb-4">I felt confident knowing exactly how my contribution was used.</p>
-            <p className="font-semibold">Fatima, UAE</p>
-          </div>
-        </div>
-        <div className="text-center mt-8">
-          <Button asChild className="bg-primary text-white">
-            <Link href="/participation">Join Now</Link>
-          </Button>
-        </div>
-      </section>
+      
+     
+      
+      
     </div>
   );
 }

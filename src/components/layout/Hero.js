@@ -18,10 +18,10 @@ export default function Hero() {
       >
         <SwiperSlide>
           <div
-            className="h-full bg-cover bg-center flex items-center justify-center"
+            className="h-full bg-cover relative  bg-center flex items-center justify-center"
             style={{ backgroundImage: 'url(/images/hero1.jpg)' }}
           >
-            <div className="text-center text-white bg-black/50 bg-opacity-50 p-6 rounded-lg">
+            <div className="text-center absolute w-[50vw]  h-[55vh] sm:h-[45vh] flex flex-col items-center justify-center text-black left-[30%] top-[55%] transform -translate-x-[50%] -translate-y-[50%] bg-white/50 bg-opacity-50 p-6 rounded-lg">
               <h1 className="text-3xl md:text-5xl font-bold mb-4">Join Eid ul Adha Participation</h1>
               <p className="text-lg md:text-xl mb-6">Contribute to a meaningful tradition with ease.</p>
               <Button asChild className="bg-primary text-white">
@@ -32,10 +32,10 @@ export default function Hero() {
         </SwiperSlide>
         <SwiperSlide>
           <div
-            className="h-full bg-cover bg-center flex items-center justify-center"
+            className="h-full bg-cover relative bg-center flex items-center justify-center"
             style={{ backgroundImage: 'url(/images/hero2.jpg)' }}
           >
-            <div className="text-center text-white bg-black/50 bg-opacity-50 p-6 rounded-lg">
+            <div className="text-center  bg-white/50 absolute w-[50vw] h-[55vh] flex flex-col items-center justify-center text-black left-[30%] top-[55%] transform -translate-x-[50%] -translate-y-[50%] bg-opacity-50 p-6 rounded-lg">
               <h1 className="text-3xl md:text-5xl font-bold mb-4">Transparent and Trustworthy</h1>
               <p className="text-lg md:text-xl mb-6">Organize your participation seamlessly.</p>
               <Button asChild className="bg-primary text-white">
