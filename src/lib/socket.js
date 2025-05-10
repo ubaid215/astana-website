@@ -1,51 +1,80 @@
 import { Server } from 'socket.io';
-import http from 'http';
 
 let io;
+let isInitializing = false;
 
 export function initSocket(server) {
-  if (io) {
-    console.log('[Socket.io] Already initialized');
-    return io;
+  console.log('[Socket.io] Initializing Socket.IO server');
+  
+  if (!server || typeof server.listen !== 'function') {
+    console.error('[Socket.io] Invalid server object provided');
+    return null;
   }
 
+  if (io) {
+    console.log('[Socket.io] Server already initialized');
+    return io;
+  }
+  
+  if (isInitializing) {
+    console.log('[Socket.io] Initialization already in progress');
+    return null;
+  }
+
+  isInitializing = true;
+
   try {
+    const corsOrigin = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3000';
+    console.log('[Socket.io] CORS origin:', corsOrigin);
+
     io = new Server(server, {
       path: '/socket.io',
       cors: {
-        origin: process.env.NEXT_PUBLIC_SOCKET_URL,
+        origin: corsOrigin,
         methods: ['GET', 'POST'],
-        credentials: true,
+        credentials: true
       },
+      pingInterval: 10000,
+      pingTimeout: 5000,
+      transports: ['websocket', 'polling'],
+      allowEIO3: true
+    });
+
+    // Connection logging
+    io.engine.on('connection_error', (err) => {
+      console.error('[Socket.io] Connection error:', err.message, err.context);
     });
 
     io.on('connection', (socket) => {
-      console.log('[Socket.io] Client connected:', socket.id);
-      socket.join('admin');
-      socket.join('public');
-
+      console.log(`[Socket.io] Client connected: ${socket.id} from ${socket.handshake.headers.origin}`);
+      
       socket.on('join', (room) => {
-        console.log(`[Socket.io] Socket ${socket.id} joined room: ${room}`);
+        console.log(`[Socket.io] ${socket.id} joined room: ${room}`);
         socket.join(room);
       });
 
-      socket.on('disconnect', () => {
-        console.log('[Socket.io] Client disconnected:', socket.id);
+      socket.on('disconnect', (reason) => {
+        console.log(`[Socket.io] Client disconnected: ${socket.id}. Reason: ${reason}`);
       });
     });
 
-    console.log('[Socket.io] Initialized with path: /socket.io');
+    console.log('[Socket.io] Server initialized successfully');
+    isInitializing = false;
     return io;
   } catch (error) {
-    console.error('[Socket.io] Initialization error:', error.message);
-    throw error;
+    console.error('[Socket.io] Initialization failed:', error);
+    isInitializing = false;
+    return null;
   }
 }
 
 export function getIO() {
-  if (!io) {
-    console.warn('[Socket.io] Not initialized yet');
-    return null; // Rely on server.js initialization
+  if (typeof window === 'undefined') {
+    if (!global.io) {
+      console.warn('[Socket.io] getIO called but no server instance found');
+    }
+    return global.io || null;
   }
-  return io;
+  console.warn('[Socket.io] getIO called on client-side - returning null');
+  return null;
 }

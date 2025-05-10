@@ -30,6 +30,8 @@ export default function ProfilePage() {
       return;
     }
 
+    
+
     const fetchProfile = async () => {
       try {
         const res = await fetch('/api/profile');
@@ -107,6 +109,8 @@ export default function ProfilePage() {
   if (error) {
     return <div className="min-h-screen bg-background p-6 text-center text-red-600">{error}</div>;
   }
+
+  
 
   return (
     <div className="min-h-screen bg-background p-6">

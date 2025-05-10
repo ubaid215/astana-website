@@ -3,7 +3,7 @@ import Image from 'next/image';
 export const metadata = {
   title: 'About Us - Eid ul Adha Participation System',
   description: 'Learn about our mission to make Eid ul Adha participation transparent and accessible.',
-  keywords: 'about, Eid ul Adha, mission, transparency',
+  keywords: 'about, Eid ul Adha, mission, transparency, Khanqah Saifia Murshidabad',
 };
 
 export default function AboutPage() {
@@ -22,9 +22,52 @@ export default function AboutPage() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-12">
+        {/* Founder's Message Section */}
+        <div className="mb-16 bg-white rounded-xl shadow-lg overflow-hidden">
+          <div className="flex flex-col md:flex-row">
+            <div className="md:w-1/3 bg-amber-500 p-8 text-white flex flex-col justify-center items-center text-center">
+              <div className="mb-6 rounded-full bg-white p-2 inline-block">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                </svg>
+              </div>
+              <h2 className="text-xl font-bold mb-2">Message from Our Founder & Spiritual Guide</h2>
+              <h3 className="text-3xl font-bold text-[#1e3a8a] mb-4">Hazrat Sarkar Wakeel Sahib</h3>
+              <p className="text-amber-100 italic">(Damat Barakatuhum Aliyah)</p>
+              <p className="mt-2 text-amber-100">Khanqah Saifia Murshidabad, Faisalabad</p>
+            </div>
+            
+            <div className="md:w-2/3 p-8">
+              <div className="prose max-w-none">
+                <p className="text-gray-700 mb-4">
+                  <b>Islam is not only a path of worship, but also a path of compassion, service, and selflessness. 
+                  For years, I have believed and taught that true devotion lies not only in fulfilling our duties 
+                  to Allah (Haqooq-UAllah), but also in serving His creation (Haqqooq-ul-Ibad).</b>
+                </p>
+                <p className="text-gray-700 mb-4">
+                  No act of sacrifice is complete unless it brings ease to another heart.
+                </p>
+                <p className="text-gray-700 mb-4">
+                  The purpose of this mission is to reach those forgotten homes where Eid passes like any other day 
+                  without joy, without meat, without celebration. It is our duty to ensure that no soul is left behind.
+                </p>
+                <p className="text-gray-700">
+                  I pray that through this initiative, your Qurbani becomes a means of happiness for those who have 
+                  not smiled in a long time, and that every contribution becomes a step toward divine closeness and 
+                  collective upliftment.
+                </p>
+                <p className="text-gray-700 font-medium">
+                  May Allah accept our efforts, purify our intentions, and make this mission a continuous source 
+                  of barakah in both worlds.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Mission Section */}
-        <div className="flex flex-col md:flex-row items-center gap-8 mb-16">
-          <div className="md:w-1/2">
+        <div className="mb-16">
+          <div className="text-center mb-8">
             <div className="bg-amber-100 p-1 rounded-full inline-block mb-4">
               <div className="bg-amber-500 p-4 rounded-full">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -33,18 +76,44 @@ export default function AboutPage() {
               </div>
             </div>
             <h2 className="text-3xl font-bold text-gray-800 mb-4">Our Mission</h2>
-            <p className="text-lg text-gray-600 mb-6">
-              At the Eid ul Adha Participation System, our mission is to provide a transparent, trustworthy, and accessible platform for individuals to participate in the sacred tradition of Eid ul Adha. We aim to simplify the process, ensuring every contribution is meaningful and impactful.
+            <p className="text-lg text-gray-600 max-w-3xl mx-auto">
+              At the Eid ul Adha Participation System, our mission is to provide a transparent, trustworthy, and accessible platform for individuals to participate in the sacred tradition of Eid ul Adha.
             </p>
           </div>
-          <div className="md:w-1/2 rounded-xl overflow-hidden shadow-lg">
-            <Image 
-              src="/images/about-img.jpg" 
-              alt="Our mission" 
-              width={600}
-              height={400}
-              className="w-full h-full object-cover" 
-            />
+
+          <div className="bg-gradient-to-r from-amber-50 to-white rounded-xl shadow-lg p-8 mb-10">
+            <h3 className="text-2xl font-bold text-gray-800 mb-4 text-center">Mission of Shabzada Muhammad Faran Zaheer Muhammadi Saifi</h3>
+            <h4 className="text-xl font-semibold text-amber-600 mb-6 text-center">Eid-ul-Adha: Spreading Joy to Forgotten Homes</h4>
+            
+            <div className="prose max-w-none text-gray-700">
+              <p className="mb-4">
+                As the blessed month of Eid-ul-Adha approaches, many of us prepare for sacrifice with gratitude in our hearts. But one question often goes unasked: <strong>Does the joy of Eid reach every home?</strong>
+              </p>
+              
+              <p className="mb-4">
+                Our dedicated team works year-round to identify families living in extreme poverty, those who go through the entire year without a single bite of meat, not because they choose to, but because they simply cannot afford it. These are people who suffer in silence, unable to ask for help, yet deserving of dignity and care.
+              </p>
+              
+              <p className="mb-4 font-medium">
+                Our mission is to ensure that this Eid they are not forgotten.
+              </p>
+              
+              <p className="mb-4">
+                Through careful outreach, we personally visit underserved communities and hand-deliver sacrificial meat to those most in need, bringing them not only nourishment, but a sense of belonging, love, and the shared joy of Eid.
+              </p>
+              
+              <p className="mb-4">
+                This is more than charity. It is an act of <strong>Haquq-ul-Ibad</strong>, fulfilling the rights of fellow human beings. And it is the spiritual mission of our beloved <strong>Khanqah Saifia Murshidabad (Faisalabad)</strong>: <em>To bring smiles to the faces of those who have forgotten what happiness feels like.</em>
+              </p>
+              
+              <p className="mb-4">
+                This Eid, we invite you to join us in this mission. Let your Qurbani reach the ones who truly need it. Let their heartfelt prayers be your greatest reward.
+              </p>
+              
+              <p className="text-center font-bold text-lg text-amber-700 mt-6">
+                Give with love. Share with purpose. And make your sacrifice count.
+              </p>
+            </div>
           </div>
         </div>
 
@@ -65,7 +134,7 @@ export default function AboutPage() {
           </div>
           <div className="md:w-1/2 rounded-xl overflow-hidden shadow-lg">
             <Image 
-              src="/images/team-img.jpg" 
+              src="/about-img.jpg" 
               alt="Our team" 
               width={600} 
               height={400} 

@@ -12,7 +12,7 @@ import { useSocket } from '@/hooks/useSocket';
 export default function ParticipationForm() {
   const { data: session } = useSession();
   const router = useRouter();
-  const { prices, setPrices } = useSocket();
+  const { socket, prices, setPrices } = useSocket();
   const [formData, setFormData] = useState({
     collectorName: '',
     whatsappNumber: '',
@@ -27,31 +27,55 @@ export default function ParticipationForm() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Fetch prices on initial load if not already in state
   useEffect(() => {
-    // Fetch initial prices
     const fetchPrices = async () => {
       try {
-        const res = await fetch('/api/prices');
-        const data = await res.json();
-        if (res.ok) {
-          setPrices(data);
+        const res = await fetch('/api/admin/prices');
+        if (!res.ok) {
+          throw new Error('Failed to fetch prices');
         }
+        const data = await res.json();
+        console.log('[ParticipationForm] Fetched initial prices:', data);
+        setPrices(data);
       } catch (err) {
-        console.error('Failed to fetch prices:', err);
+        console.error('[ParticipationForm] Failed to fetch prices:', err);
       }
     };
+
     if (!prices) {
       fetchPrices();
     }
   }, [prices, setPrices]);
 
+  // Listen for price updates via Socket.IO
+  useEffect(() => {
+    if (socket) {
+      console.log('[ParticipationForm] Setting up Socket.IO listener for pricesUpdated event');
+      
+      socket.on('pricesUpdated', (newPrices) => {
+        console.log('[ParticipationForm] Prices updated via Socket.IO:', newPrices);
+        setPrices(newPrices);
+      });
+
+      return () => {
+        console.log('[ParticipationForm] Cleaning up Socket.IO listener');
+        socket.off('pricesUpdated');
+      };
+    }
+  }, [socket, setPrices]);
+
+  // Update total amount when prices, cow quality, or shares change
   useEffect(() => {
     if (prices && formData.cowQuality && formData.shares) {
-      const price = prices[formData.cowQuality.toLowerCase()];
-      setFormData((prev) => ({
-        ...prev,
-        totalAmount: price * formData.shares,
-      }));
+      const priceKey = formData.cowQuality.toLowerCase();
+      if (prices[priceKey]) {
+        const price = prices[priceKey];
+        setFormData((prev) => ({
+          ...prev,
+          totalAmount: price * formData.shares,
+        }));
+      }
     }
   }, [formData.cowQuality, formData.shares, prices]);
 
@@ -91,14 +115,15 @@ export default function ParticipationForm() {
           userId: session.user.id,
         }),
       });
-      const data = await res.json();
-      if (res.ok) {
-        router.push('/profile'); // Changed from confirmation page to profile page
-      } else {
-        setError(data.error || 'Submission failed');
+      
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Submission failed');
       }
+      
+      router.push('/profile'); // Changed from confirmation page to profile page
     } catch (err) {
-      setError('Server error');
+      setError(err.message || 'Server error');
     } finally {
       setLoading(false);
     }

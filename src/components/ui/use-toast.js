@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react'; // Assuming you have lucide-react for icons
+import { X } from 'lucide-react';
 
 // Toast context
 const ToastContext = createContext(undefined);
@@ -10,6 +10,11 @@ const ToastContext = createContext(undefined);
 // Toast provider
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const addToast = (toast) => {
     const id = Math.random().toString(36).substr(2, 9);
@@ -20,10 +25,15 @@ export function ToastProvider({ children }) {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   };
 
+  // Create a toast function compatible with shadcn/ui
+  const toast = ({ title, description, variant = 'default', duration = 5000 }) => {
+    addToast({ title, description, variant, duration });
+  };
+
   return (
-    <ToastContext.Provider value={{ addToast, removeToast }}>
+    <ToastContext.Provider value={{ toast, addToast, removeToast }}>
       {children}
-      {typeof window !== 'undefined' &&
+      {isMounted &&
         createPortal(
           <div className="fixed top-4 right-4 z-50 flex flex-col gap-2">
             {toasts.map((toast) => (
@@ -42,7 +52,7 @@ export function useToast() {
   if (!context) {
     throw new Error('useToast must be used within a ToastProvider');
   }
-  return context;
+  return { toast: context.toast }; // Return { toast } to match shadcn/ui API
 }
 
 // Toast component

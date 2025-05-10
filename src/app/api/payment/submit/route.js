@@ -1,4 +1,4 @@
-export const dynamic = 'force-dynamic'
+export const dynamic = 'force-dynamic';
 
 import connectDB from '@/lib/db/mongodb';
 import Participation from '@/lib/db/models/Participation';
@@ -9,7 +9,6 @@ import { getToken } from 'next-auth/jwt';
 import fs from 'fs/promises';
 import path from 'path';
 
-// Disable bodyParser is not needed, as NextRequest.formData() handles multipart data
 export async function POST(req) {
   try {
     // Authenticate user
@@ -32,7 +31,7 @@ export async function POST(req) {
       await fs.mkdir(uploadDir, { recursive: true });
     }
 
-    // Parse form data with NextRequest.formData()
+    // Parse form data
     const formData = await req.formData();
     const participationId = formData.get('participationId');
     const transactionId = formData.get('transactionId');
@@ -46,22 +45,22 @@ export async function POST(req) {
     });
 
     // Validate fields
-    if (!participationId || !transactionId) {
-      console.error('[Payment API] Missing fields:', { participationId, transactionId });
-      return NextResponse.json({ error: 'Missing participationId or transactionId' }, { status: 400 });
+    if (!participationId || !transactionId || !screenshot) {
+      console.error('[Payment API] Missing required fields:', { participationId, transactionId, screenshot });
+      return NextResponse.json({ error: 'Missing required fields: participationId, transactionId, and screenshot are required' }, { status: 400 });
     }
 
     // Verify participation belongs to user
     const participation = await Participation.findOne({ _id: participationId, userId: token.sub });
     if (!participation) {
       console.error('[Payment API] Invalid participation:', { participationId, userId: token.sub });
-      return NextResponse.json({ error: 'Invalid participation' }, { status: 400 });
+      return NextResponse.json({ error: 'Invalid participation or unauthorized access' }, { status: 403 });
     }
 
-    // Check if transactionId is unique (excluding current participation)
+    // Check if transactionId is unique
     const existingParticipation = await Participation.findOne({
       transactionId,
-      _id: { $ne: participationId }, // Exclude the current participation
+      _id: { $ne: participationId },
     });
     if (existingParticipation) {
       console.error('[Payment API] Transaction ID already used:', { transactionId, existingParticipationId: existingParticipation._id });
@@ -94,27 +93,37 @@ export async function POST(req) {
       await fs.writeFile(newPath, buffer);
       screenshotPath = `/uploads/${newFileName}`;
       console.log('[Payment API] Screenshot saved:', screenshotPath);
+    } else {
+      console.error('[Payment API] Invalid screenshot file');
+      return NextResponse.json({ error: 'Invalid screenshot file' }, { status: 400 });
     }
 
     // Update participation
     participation.transactionId = transactionId;
-    if (screenshotPath) participation.screenshot = screenshotPath;
+    participation.screenshot = screenshotPath;
+    participation.paymentStatus = 'Pending'; // Set initial status
     participation.updatedAt = new Date();
     await participation.save();
     console.log('[Payment API] Participation updated:', participationId);
 
     // Emit Socket.io notification
     const user = await User.findById(token.sub);
+    if (!user) {
+      console.error('[Payment API] User not found:', token.sub);
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
     const io = getIO();
     if (io) {
-      io.to('admin').emit('paymentSubmission', {
+      const notification = {
         userName: user.name,
         participationId,
         transactionId,
         screenshot: screenshotPath,
         timestamp: new Date(),
-      });
-      console.log('[Payment API] Socket.io notification emitted:', { participationId });
+      };
+      io.to('admin').emit('paymentSubmission', notification);
+      console.log('[Payment API] Socket.io notification emitted:', notification);
     } else {
       console.warn('[Payment API] Socket.io not initialized, skipping notification');
     }

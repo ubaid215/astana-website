@@ -9,12 +9,14 @@ import { getToken } from 'next-auth/jwt';
 export async function POST(req) {
   try {
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+    console.log('[API] Token:', token);
     if (!token || !token.sub) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     await connectDB();
     const data = await req.json();
+    console.log('[API] Participation data:', data);
 
     if (
       !data.collectorName ||
@@ -24,11 +26,13 @@ export async function POST(req) {
       isNaN(data.shares) ||
       data.shares < 1
     ) {
+      console.log('[API] Invalid participation data:', data);
       return NextResponse.json({ error: 'Invalid participation data' }, { status: 400 });
     }
 
     if (data.shares > 7) {
       data.timeSlot = '';
+      console.log('[API] Shares > 7, clearing timeSlot');
     }
 
     if (data.timeSlot && data.shares <= 7) {
@@ -40,6 +44,7 @@ export async function POST(req) {
       });
       const totalShares = existing.reduce((sum, p) => sum + p.shares, 0);
       if (totalShares + data.shares > 7) {
+        console.log('[API] Time slot full:', { timeSlot: data.timeSlot, totalShares, newShares: data.shares });
         return NextResponse.json({ error: 'Selected time slot is full' }, { status: 400 });
       }
     }
@@ -52,14 +57,20 @@ export async function POST(req) {
       createdAt: new Date(),
     });
     await participation.save();
+    console.log('[API] New participation saved:', participation._id);
 
     const slots = await allocateSlot(participation);
+    console.log('[API] Slots allocated:', slots);
 
     const io = getIO();
     if (io) {
+      console.log('[API] Emitting newParticipation event:', participation._id);
       io.to('admin').emit('newParticipation', participation);
       if (slots) {
-        slots.forEach((slot) => io.to('admin').emit('updateSlot', slot));
+        slots.forEach((slot) => {
+          console.log('[API] Emitting updateSlot event:', slot._id);
+          io.to('admin').emit('updateSlot', slot);
+        });
       }
     } else {
       console.warn('[API] Socket.io not available, skipping events');
@@ -73,40 +84,5 @@ export async function POST(req) {
       data: await req.json().catch(() => 'Invalid JSON'),
     });
     return NextResponse.json({ error: error.message || 'Server error' }, { status: 500 });
-  }
-}
-
-export async function DELETE(req) {
-  try {
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-    if (!token || !token.sub || token.role !== 'admin') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    await connectDB();
-
-    // Delete all participations
-    const { searchParams } = new URL(req.url);
-    if (!searchParams.get('id')) {
-      await Participation.deleteMany({});
-      await Slot.updateMany({}, { $set: { participants: [] } }); // Clear participants from slots
-
-      const io = getIO();
-      if (io) {
-        io.to('admin').emit('allParticipationsDeleted');
-      } else {
-        console.warn('[API] Socket.io not available, skipping events');
-      }
-
-      return NextResponse.json({ message: 'All participations deleted' }, { status: 200 });
-    }
-
-    return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
-  } catch (error) {
-    console.error('[API] Delete all participations error:', {
-      message: error.message,
-      stack: error.stack,
-    });
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }

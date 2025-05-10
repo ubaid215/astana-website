@@ -15,7 +15,7 @@ const ParticipationSchema = new mongoose.Schema({
   slotAssigned: { type: Boolean, default: false },
   paymentStatus: {
     type: String,
-    enum: ['Pending', 'Completed', 'Failed'],
+    enum: ['Pending', 'Completed', 'Rejected'],
     default: 'Pending',
   },
   paymentDate: { type: Date },
