@@ -134,7 +134,7 @@ export default function AboutPage() {
           </div>
           <div className="md:w-1/2 rounded-xl overflow-hidden shadow-lg">
             <Image 
-              src="/about-img.jpg" 
+              src="/images/team-img.jpg" 
               alt="Our team" 
               width={600} 
               height={400} 
