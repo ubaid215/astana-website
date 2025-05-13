@@ -3,12 +3,13 @@ const { parse } = require('url');
 const next = require('next');
 const { initSocket } = require('./src/lib/socket');
 
+// Configure environment for production
 const dev = process.env.NODE_ENV !== 'production';
-const hostname = process.env.HOST || 'localhost';
+const hostname = process.env.HOST || '0.0.0.0'; 
 const port = parseInt(process.env.PORT || '3000', 10);
 
 // Create Next.js app
-const app = next({ dev, hostname, port });
+const app = next({ dev, hostname: dev ? hostname : undefined, port });
 const handle = app.getRequestHandler();
 
 app.prepare().then(() => {
@@ -16,9 +17,6 @@ app.prepare().then(() => {
   const server = createServer(async (req, res) => {
     try {
       const parsedUrl = parse(req.url, true);
-      const { pathname } = parsedUrl;
-
-      // Handle API routes and static files
       await handle(req, res, parsedUrl);
     } catch (err) {
       console.error('Error handling request:', err);
@@ -38,16 +36,21 @@ app.prepare().then(() => {
   // Store io instance globally for server-side usage
   global.io = io;
 
-  // Handle WebSocket upgrades
-  server.on('upgrade', (req, socket, head) => {
-    io.engine.handleUpgrade(req, socket, head);
-  });
-
   // Start server
   server.listen(port, hostname, (err) => {
     if (err) throw err;
+    console.log(`> Environment: ${process.env.NODE_ENV}`);
     console.log(`> Server ready on http://${hostname}:${port}`);
-    console.log(`> Socket.IO available at ws://${hostname}:${port}/socket.io`);
+    console.log(`> Socket.IO initialized successfully`);
+  });
+
+  // Graceful shutdown
+  process.on('SIGTERM', () => {
+    console.log('SIGTERM received, shutting down gracefully');
+    server.close(() => {
+      console.log('Server closed');
+      process.exit(0);
+    });
   });
 
   // Error handling
