@@ -21,6 +21,9 @@ export default function AdminPaymentsPage() {
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('all');
 
+  // Base URL for screenshots (adjust for production)
+  const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -75,6 +78,25 @@ export default function AdminPaymentsPage() {
     } catch (err) {
       console.error('Failed to mark notifications as read:', err);
     }
+  };
+
+  // Validate and format screenshot URL
+  const getScreenshotUrl = (screenshot) => {
+    if (!screenshot) return null;
+    
+    // Check if the URL is already absolute
+    if (screenshot.startsWith('http://') || screenshot.startsWith('https://')) {
+      return screenshot;
+    }
+    
+    // Handle relative paths or filenames
+    const cleanPath = screenshot.replace(/^\/+/, ''); // Remove leading slashes
+    const url = `${BASE_URL}/uploads/${cleanPath}`;
+    
+    // Log for debugging
+    console.log('[AdminPaymentsPage] Generated screenshot URL:', url, 'from:', screenshot);
+    
+    return url;
   };
 
   if (loading) {
@@ -132,51 +154,57 @@ export default function AdminPaymentsPage() {
           </TableHeader>
           <TableBody>
             {filteredParticipations.length > 0 ? (
-              filteredParticipations.map((p) => (
-                <TableRow key={p._id}>
-                  <TableCell className="font-medium">{p._id}</TableCell>
-                  <TableCell>{p.userId?.name || 'Unknown'}</TableCell>
-                  <TableCell>${p.totalAmount.toLocaleString()}</TableCell>
-                  <TableCell>
-                    {p.paymentDate ? format(new Date(p.paymentDate), 'PP') : 'N/A'}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={
-                      p.paymentStatus === 'Completed' ? 'success' :
-                      p.paymentStatus === 'Rejected' ? 'destructive' : 'warning'
-                    }>
-                      {p.paymentStatus}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {p.screenshot ? (
-                      <a 
-                        href={p.screenshot} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline"
+              filteredParticipations.map((p) => {
+                const screenshotUrl = getScreenshotUrl(p.screenshot);
+                return (
+                  <TableRow key={p._id}>
+                    <TableCell className="font-medium">{p._id}</TableCell>
+                    <TableCell>{p.userId?.name || 'Unknown'}</TableCell>
+                    <TableCell>PKR {p.totalAmount.toLocaleString()}</TableCell>
+                    <TableCell>
+                      {p.paymentDate ? format(new Date(p.paymentDate), 'PP') : 'N/A'}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={
+                        p.paymentStatus === 'Completed' ? 'success' :
+                        p.paymentStatus === 'Rejected' ? 'destructive' : 'warning'
+                      }>
+                        {p.paymentStatus}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {screenshotUrl ? (
+                        <a 
+                          href={screenshotUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                          onClick={() => console.log('[AdminPaymentsPage] Opening screenshot:', screenshotUrl)}
+                        >
+                          View
+                        </a>
+                      ) : (
+                        <span className="text-gray-500">N/A</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Select
+                        value={p.paymentStatus}
+                        onValueChange={(value) => handleStatusUpdate(p._id, value)}
                       >
-                        View
-                      </a>
-                    ) : 'N/A'}
-                  </TableCell>
-                  <TableCell>
-                    <Select
-                      value={p.paymentStatus}
-                      onValueChange={(value) => handleStatusUpdate(p._id, value)}
-                    >
-                      <SelectTrigger className="w-[150px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Pending">Pending</SelectItem>
-                        <SelectItem value="Completed">Completed</SelectItem>
-                        <SelectItem value="Rejected">Rejected</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                </TableRow>
-              ))
+                        <SelectTrigger className="w-[150px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Pending">Pending</SelectItem>
+                          <SelectItem value="Completed">Completed</SelectItem>
+                          <SelectItem value="Rejected">Rejected</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             ) : (
               <TableRow>
                 <TableCell colSpan={7} className="text-center">
@@ -208,6 +236,24 @@ export default function AdminPaymentsPage() {
 }
 
 function PaymentNotifications({ notifications }) {
+  const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+
+  // Validate and format screenshot URL
+  const getScreenshotUrl = (screenshot) => {
+    if (!screenshot) return null;
+    
+    if (screenshot.startsWith('http://') || screenshot.startsWith('https://')) {
+      return screenshot;
+    }
+    
+    const cleanPath = screenshot.replace(/^\/+/, '');
+    const url = `${BASE_URL}/uploads/${cleanPath}`;
+    
+    console.log('[PaymentNotifications] Generated screenshot URL:', url, 'from:', screenshot);
+    
+    return url;
+  };
+
   if (notifications.length === 0) {
     return (
       <div className="text-center py-8 text-gray-500">
@@ -218,36 +264,42 @@ function PaymentNotifications({ notifications }) {
 
   return (
     <div className="space-y-4">
-      {notifications.map((n) => (
-        <div key={n._id || n.timestamp} className="border-b pb-4 last:border-0">
-          <div className="flex justify-between">
-            <div>
-              <p className="font-medium">
-                {n.userName} submitted payment ({n.amount ? `$${n.amount.toLocaleString()}` : 'N/A'})
-              </p>
-              <p className="text-sm text-gray-600">
-                Participation ID: {n.participationId}
-              </p>
-              <p className="text-sm text-gray-600">
-                Transaction ID: {n.transactionId}
-              </p>
+      {notifications.map((n) => {
+        const screenshotUrl = getScreenshotUrl(n.screenshot);
+        return (
+          <div key={n._id || n.timestamp} className="border-b pb-4 last:border-0">
+            <div className="flex justify-between">
+              <div>
+                <p className="font-medium">
+                  {n.userName} submitted payment ({n.amount ? `PKR ${n.amount.toLocaleString()}` : 'N/A'})
+                </p>
+                <p className="text-sm text-gray-600">
+                  Participation ID: {n.participationId}
+                </p>
+                <p className="text-sm text-gray-600">
+                  Transaction ID: {n.transactionId}
+                </p>
+              </div>
+              <div className="text-sm text-gray-500">
+                {format(new Date(n.timestamp), 'PPpp')}
+              </div>
             </div>
-            <div className="text-sm text-gray-500">
-              {format(new Date(n.timestamp), 'PPpp')}
-            </div>
+            {screenshotUrl ? (
+              <a
+                href={screenshotUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block mt-2 text-sm text-blue-600 hover:underline"
+                onClick={() => console.log('[PaymentNotifications] Opening screenshot:', screenshotUrl)}
+              >
+                View Payment Proof
+              </a>
+            ) : (
+              <span className="inline-block mt-2 text-sm text-gray-500">No Proof Available</span>
+            )}
           </div>
-          {n.screenshot && (
-            <a
-              href={n.screenshot}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-block mt-2 text-sm text-blue-600 hover:underline"
-            >
-              View Payment Proof
-            </a>
-          )}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

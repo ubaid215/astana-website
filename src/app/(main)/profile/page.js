@@ -30,8 +30,6 @@ export default function ProfilePage() {
       return;
     }
 
-    
-
     const fetchProfile = async () => {
       try {
         const res = await fetch('/api/profile');
@@ -109,8 +107,6 @@ export default function ProfilePage() {
   if (error) {
     return <div className="min-h-screen bg-background p-6 text-center text-red-600">{error}</div>;
   }
-
-  
 
   return (
     <div className="min-h-screen bg-background p-6">
@@ -203,7 +199,7 @@ export default function ProfilePage() {
                         </SelectItem>
                       ))
                     ) : (
-                      <SelectItem value="" disabled>
+                       <SelectItem value="" disabled>
                         No participations available
                       </SelectItem>
                     )}
@@ -284,6 +280,27 @@ export default function ProfilePage() {
                 )}
               </TableBody>
             </Table>
+          </div>
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-semibold text-secondary mb-4">Payment Account Details</h2>
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-lg font-semibold text-primary flex items-center">
+                  Meezan Bank
+                </h4>
+                <p className="text-sm font-medium">IBAN Number:</p>
+                <p className="text-sm">PK40MEZN0004170110884115</p>
+              </div>
+              <div>
+                <h4 className="text-lg font-semibold text-primary">Western Union</h4>
+                <p className="text-sm font-medium"><strong>Payment send by Name or Western Union</strong></p>
+                <p>Receiver Name</p>
+                <p className="text-sm"><b>Name:</b> Muhammad Ubaidullah</p>
+                <p className="text-sm font-medium"><b>ID Card Number:</b></p>
+                <p className="text-sm">35501-0568066-3</p>
+                <p className="text-sm font-medium"><b>Phone:</b> +92321-7677062</p>
+              </div>
+            </div>
           </div>
           <div className="bg-white rounded-lg shadow-md p-6">
             <h2 className="text-xl font-semibold text-secondary mb-4">Account Details</h2>
