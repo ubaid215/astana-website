@@ -73,7 +73,7 @@ export default function PricesPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background p-6 ml-0 md:ml-64">
+    <div className="min-h-screen bg-background p-6 ml-0 ">
       <h1 className="text-3xl font-bold text-primary mb-8">Manage Cow Prices</h1>
       
       <div className="max-w-md mx-auto bg-white rounded-lg shadow-md p-6">

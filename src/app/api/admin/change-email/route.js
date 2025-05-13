@@ -1,11 +1,10 @@
-export const dynamic = 'force-dynamic'
+export const dynamic = 'force-dynamic';
 
 import connectDB from '@/lib/db/mongodb';
 import User from '@/lib/db/models/User';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import bcrypt from 'bcryptjs';
-import { sendVerificationEmail } from '@/lib/email';
 import { NextResponse } from 'next/server';
 
 export async function POST(req) {
@@ -54,17 +53,13 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Email already in use' }, { status: 409 });
     }
 
-    // Generate verification token
-    const verificationToken = user.generateVerificationToken();
-    user.pendingEmail = newEmail;
+    // Update email directly
+    user.email = newEmail;
     await user.save();
 
-    // Send verification email
-    await sendVerificationEmail(newEmail, verificationToken);
-    console.log('[API] Verification email sent to:', newEmail);
-
+    console.log('[API] Email updated successfully for:', session.user.email, 'to:', newEmail);
     return NextResponse.json(
-      { message: 'Verification email sent to new email address' },
+      { message: 'Email updated successfully' },
       { status: 200 }
     );
   } catch (error) {

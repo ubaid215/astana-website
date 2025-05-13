@@ -61,7 +61,7 @@ export default function AdminDashboard() {
 
   return (
     <AdminGuard>
-    <div className="min-h-screen bg-background p-6 ml-0 md:ml-64">
+    <div className="min-h-screen bg-background p-6 ml-0 ">
       <h1 className="text-3xl font-bold text-primary mb-8">Admin Dashboard</h1>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
@@ -95,12 +95,7 @@ export default function AdminDashboard() {
               <Link href="/admin/slots">View All Slots</Link>
             </Button>
           </div>
-          <div className="p-6 bg-white rounded-lg shadow-md">
-            <h2 className="text-xl font-semibold text-secondary mb-4">Manage Payments</h2>
-            <Button asChild className="mt-4 bg-primary text-white">
-              <Link href="/admin/payments">View Payments</Link>
-            </Button>
-          </div>
+          
         </div>
       </div>
     </div>

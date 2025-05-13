@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import connectDB from '@/lib/db/mongodb';
 import Participation from '@/lib/db/models/Participation';
 import User from '@/lib/db/models/User';
+import Notification from '@/lib/db/models/Notification';
 import { getIO } from '@/lib/socket';
 import { NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
@@ -37,24 +38,21 @@ export async function POST(req) {
     const transactionId = formData.get('transactionId');
     const screenshot = formData.get('screenshot');
 
-    // Log form data
-    console.log('[Payment API] Form data received:', {
-      participationId,
-      transactionId,
-      screenshot: screenshot ? screenshot.name : null,
-    });
-
     // Validate fields
     if (!participationId || !transactionId || !screenshot) {
-      console.error('[Payment API] Missing required fields:', { participationId, transactionId, screenshot });
-      return NextResponse.json({ error: 'Missing required fields: participationId, transactionId, and screenshot are required' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Missing required fields: participationId, transactionId, and screenshot are required' }, 
+        { status: 400 }
+      );
     }
 
     // Verify participation belongs to user
     const participation = await Participation.findOne({ _id: participationId, userId: token.sub });
     if (!participation) {
-      console.error('[Payment API] Invalid participation:', { participationId, userId: token.sub });
-      return NextResponse.json({ error: 'Invalid participation or unauthorized access' }, { status: 403 });
+      return NextResponse.json(
+        { error: 'Invalid participation or unauthorized access' }, 
+        { status: 403 }
+      );
     }
 
     // Check if transactionId is unique
@@ -63,25 +61,30 @@ export async function POST(req) {
       _id: { $ne: participationId },
     });
     if (existingParticipation) {
-      console.error('[Payment API] Transaction ID already used:', { transactionId, existingParticipationId: existingParticipation._id });
-      return NextResponse.json({ error: 'Transaction ID is already used by another participation' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Transaction ID is already used by another participation' }, 
+        { status: 400 }
+      );
     }
 
     // Handle file upload
     let screenshotPath = null;
     if (screenshot && screenshot instanceof File) {
-      // Validate file type
+      // Validate file type and size
       const mimeType = screenshot.type;
       if (!/image\/(jpeg|png)/.test(mimeType)) {
-        console.error('[Payment API] Invalid file type:', mimeType);
-        return NextResponse.json({ error: 'Only JPEG or PNG images are allowed' }, { status: 400 });
+        return NextResponse.json(
+          { error: 'Only JPEG or PNG images are allowed' }, 
+          { status: 400 }
+        );
       }
 
-      // Validate file size (5MB limit)
       const maxFileSize = 5 * 1024 * 1024;
       if (screenshot.size > maxFileSize) {
-        console.error('[Payment API] File too large:', screenshot.size);
-        return NextResponse.json({ error: 'File size exceeds 5MB limit' }, { status: 400 });
+        return NextResponse.json(
+          { error: 'File size exceeds 5MB limit' }, 
+          { status: 400 }
+        );
       }
 
       // Save file
@@ -89,52 +92,62 @@ export async function POST(req) {
       const newFileName = `${participationId}-${Date.now()}${extension}`;
       const newPath = path.join(uploadDir, newFileName);
       const buffer = Buffer.from(await screenshot.arrayBuffer());
-      console.log('[Payment API] Saving file to:', newPath);
       await fs.writeFile(newPath, buffer);
       screenshotPath = `/uploads/${newFileName}`;
-      console.log('[Payment API] Screenshot saved:', screenshotPath);
-    } else {
-      console.error('[Payment API] Invalid screenshot file');
-      return NextResponse.json({ error: 'Invalid screenshot file' }, { status: 400 });
     }
 
     // Update participation
     participation.transactionId = transactionId;
     participation.screenshot = screenshotPath;
-    participation.paymentStatus = 'Pending'; // Set initial status
-    participation.updatedAt = new Date();
+    participation.paymentStatus = 'Pending';
+    participation.paymentDate = new Date();
     await participation.save();
-    console.log('[Payment API] Participation updated:', participationId);
 
-    // Emit Socket.io notification
+    // Get user details
     const user = await User.findById(token.sub);
     if (!user) {
-      console.error('[Payment API] User not found:', token.sub);
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'User not found' }, 
+        { status: 404 }
+      );
     }
 
+    // Create persistent notification
+    const notification = new Notification({
+      type: 'payment',
+      userId: user._id,
+      userName: user.name,
+      userEmail: user.email,
+      participationId,
+      transactionId,
+      amount: participation.totalAmount,
+      screenshot: screenshotPath,
+      read: false
+    });
+    await notification.save();
+
+    // Emit Socket.io notification
     const io = getIO();
     if (io) {
-      const notification = {
-        userName: user.name,
-        participationId,
-        transactionId,
-        screenshot: screenshotPath,
-        timestamp: new Date(),
-      };
-      io.to('admin').emit('paymentSubmission', notification);
-      console.log('[Payment API] Socket.io notification emitted:', notification);
-    } else {
-      console.warn('[Payment API] Socket.io not initialized, skipping notification');
+      io.to('admin').emit('paymentSubmission', {
+        ...notification.toObject(),
+        timestamp: new Date()
+      });
     }
 
-    console.log('[Payment API] Payment submitted successfully:', { participationId, transactionId });
-    return NextResponse.json({ message: 'Payment details submitted successfully' }, { status: 200 });
+    return NextResponse.json(
+      { 
+        message: 'Payment submitted successfully',
+        participationId,
+        transactionId 
+      }, 
+      { status: 200 }
+    );
   } catch (error) {
-    console.error('[Payment API] Payment submission error:', {
-      message: error.message,
-      stack: error.stack,
-    });
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
+    console.error('[Payment API] Error:', error);
+    return NextResponse.json(
+      { error: 'Server error' }, 
+      { status: 500 }
+    );
   }
 }

@@ -5,20 +5,21 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import { Button } from '@/components/ui/Button';
-import { 
-  FaTachometerAlt, 
-  FaUsers, 
-  FaTable, 
-  FaCog, 
-  FaDollarSign, 
+import {
+  FaTachometerAlt,
+  FaUsers,
+  FaTable,
+  FaCog,
+  FaDollarSign,
   FaMoneyBill,
   FaBars,
   FaTimes,
   FaSignOutAlt,
+  FaHistory,
 } from 'react-icons/fa';
 import { MenuIcon } from 'lucide-react';
 
-export default function Sidebar() {
+export default function Layout({ children }) {
   const pathname = usePathname();
   // Default to desktop state to match server render
   const [isOpen, setIsOpen] = useState(true);
@@ -35,10 +36,10 @@ export default function Sidebar() {
 
     // Initial check
     checkIsMobile();
-    
+
     // Add resize listener
     window.addEventListener('resize', checkIsMobile);
-    
+
     // Clean up
     return () => window.removeEventListener('resize', checkIsMobile);
   }, []);
@@ -49,6 +50,7 @@ export default function Sidebar() {
     { name: 'Slots', href: '/admin/slots', icon: FaTable },
     { name: 'Prices', href: '/admin/prices', icon: FaDollarSign },
     { name: 'Payments', href: '/admin/payments', icon: FaMoneyBill },
+    // { name: 'Payment History', href: '/admin/payments/history', icon: FaHistory },
     { name: 'Settings', href: '/admin/settings', icon: FaCog },
   ];
 
@@ -59,7 +61,7 @@ export default function Sidebar() {
   };
 
   return (
-    <>
+    <div className="flex h-[130vh] overflow-hidden bg-gray-100">
       {/* Mobile Menu Button */}
       <button
         className="md:hidden fixed top-4 left-4 z-50 p-2 rounded-md bg-primary text-white"
@@ -71,7 +73,7 @@ export default function Sidebar() {
 
       {/* Sidebar */}
       <div
-        className={`fixed top-0 left-0 h-full bg-primary text-white transition-all duration-300 ease-in-out z-40 
+        className={`fixed md:sticky top-0 left-0 h-full bg-primary text-white transition-all duration-300 ease-in-out z-40 
           ${isOpen ? 'w-64' : 'w-16'} 
           ${isMobile && !isOpen ? '-translate-x-full' : 'translate-x-0'}`}
       >
@@ -80,9 +82,9 @@ export default function Sidebar() {
           <h1 className={`font-bold transition-opacity duration-200 ${isOpen ? 'opacity-100' : 'opacity-0 md:hidden'}`}>
             Admin Panel
           </h1>
-          
+
           {/* Desktop Toggle Button */}
-          <button 
+          <button
             className="hidden md:block text-white hover:text-gray-300 transition-colors"
             onClick={toggleSidebar}
             aria-label={isOpen ? "Collapse sidebar" : "Expand sidebar"}
@@ -112,7 +114,7 @@ export default function Sidebar() {
               </li>
             ))}
           </ul>
-          
+
           {/* Logout Button */}
           <div className="mt-auto px-2 pb-4">
             <Button
@@ -130,6 +132,15 @@ export default function Sidebar() {
         </nav>
       </div>
 
+      {/* Main Content */}
+      <div
+        className="flex-1 overflow-auto bg-gray-50"
+      >
+        <main className="p-4">
+          {children}
+        </main>
+      </div>
+
       {/* Mobile Backdrop */}
       {isMobile && isOpen && (
         <div
@@ -137,6 +148,6 @@ export default function Sidebar() {
           onClick={toggleSidebar}
         />
       )}
-    </>
+    </div>
   );
 }

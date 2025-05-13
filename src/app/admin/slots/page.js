@@ -10,7 +10,7 @@ export default async function SlotsPage() {
   const slots = await Slot.find().sort({ day: 1, timeSlot: 1 });
 
   return (
-    <div className="min-h-screen bg-background p-6 ml-0 md:ml-64">
+    <div className="min-h-screen bg-background p-6 ml-0">
       <h1 className="text-3xl font-bold text-primary mb-8">Participation Slots</h1>
       <div className="flex justify-end mb-4">
         <Button asChild className="bg-primary text-white mr-2">

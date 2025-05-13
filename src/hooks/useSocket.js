@@ -27,7 +27,7 @@ export function useSocket() {
       reconnection: true,
       reconnectionAttempts: 15,
       reconnectionDelay: 2000,
-      transports: ['websocket', 'polling'],
+      transports: [ 'polling', 'websocket'],
       withCredentials: true,
       autoConnect: true,
     });
@@ -107,20 +107,21 @@ export function useSocket() {
     });
 
     // Add paymentSubmission listener
-   socketInstance.on('paymentSubmission', (notification) => {
-  console.log('[Socket.io] Payment submission received:', notification);
-  setNotifications((prev) => {
-    const newNotifications = [...prev, {
-      userName: notification.userName,
-      participationId: notification.participationId,
-      transactionId: notification.transactionId,
-      screenshot: notification.screenshot,
-      timestamp: notification.timestamp,
-    }];
-    console.log('[Socket.io] Updated notifications:', newNotifications);
-    return newNotifications;
-  });
-});
+    socketInstance.on('paymentSubmission', (notification) => {
+      console.log('[Socket.io] Payment submission received:', notification);
+      setNotifications((prev) => {
+        const newNotifications = [{
+          type: 'payment',
+          userName: notification.userName,
+          participationId: notification.participationId,
+          transactionId: notification.transactionId,
+          screenshot: notification.screenshot,
+          timestamp: new Date(notification.timestamp),
+          read: false
+        }, ...prev]; // Newest notifications first
+        return newNotifications.slice(0, 50); // Limit to 50 notifications
+      });
+    });
 
     setSocket(socketInstance);
 
@@ -146,7 +147,7 @@ export function useSocket() {
       }
       setConnected(false);
     };
-  }, []);
+  }, [socket]); // Added socket as a dependency here
 
   const emit = useCallback(
     (event, data) => {
