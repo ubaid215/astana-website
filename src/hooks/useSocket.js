@@ -17,8 +17,6 @@ export function useSocket() {
       return;
     }
 
-    if (socket) return;
-
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || window.location.origin;
     console.log('[Socket.io] Connecting to:', socketUrl);
 
@@ -26,8 +24,8 @@ export function useSocket() {
       path: '/socket.io',
       reconnection: true,
       reconnectionAttempts: 15,
-      reconnectionDelay: 2000,
-      transports: [ 'polling', 'websocket'],
+      reconnectionDelay: 3000, // Increased for slower retries
+      transports: ['websocket', 'polling'], // Prioritize WebSocket
       withCredentials: true,
       autoConnect: true,
     });
@@ -39,13 +37,17 @@ export function useSocket() {
       socketInstance.emit('join', 'public');
     });
 
+    socketInstance.on('transport', (transport) => {
+      console.log('[Socket.io] Transport changed:', transport.name);
+    });
+
     socketInstance.on('disconnect', (reason) => {
       console.log('[Socket.io] Disconnected:', reason);
       setConnected(false);
     });
 
     socketInstance.on('connect_error', (error) => {
-      console.warn('[Socket.io] Connection error:', error.message);
+      console.warn('[Socket.io] Connection error:', error.message, error);
       setConnected(false);
     });
 
@@ -97,7 +99,7 @@ export function useSocket() {
     });
 
     socketInstance.on('pricesUpdated', (newPrices) => {
-      console.log('[Socket.io] Prices updated:', newPrices);
+      console.log('[Socket.io | Client] Prices updated:', newPrices);
       setPrices(newPrices);
     });
 
@@ -106,7 +108,6 @@ export function useSocket() {
       setNotifications((prev) => [...prev, notification]);
     });
 
-    // Add paymentSubmission listener
     socketInstance.on('paymentSubmission', (notification) => {
       console.log('[Socket.io] Payment submission received:', notification);
       setNotifications((prev) => {
@@ -118,8 +119,8 @@ export function useSocket() {
           screenshot: notification.screenshot,
           timestamp: new Date(notification.timestamp),
           read: false
-        }, ...prev]; // Newest notifications first
-        return newNotifications.slice(0, 50); // Limit to 50 notifications
+        }, ...prev];
+        return newNotifications.slice(0, 50);
       });
     });
 
@@ -127,27 +128,26 @@ export function useSocket() {
 
     return () => {
       console.log('[Socket.io] Cleaning up connection');
-      if (socketInstance) {
-        socketInstance.off('connect');
-        socketInstance.off('disconnect');
-        socketInstance.off('connect_error');
-        socketInstance.off('reconnect_attempt');
-        socketInstance.off('reconnect');
-        socketInstance.off('reconnect_failed');
-        socketInstance.off('participationDeleted');
-        socketInstance.off('participationCreated');
-        socketInstance.off('participationUpdated');
-        socketInstance.off('slotCreated');
-        socketInstance.off('slotUpdated');
-        socketInstance.off('slotDeleted');
-        socketInstance.off('pricesUpdated');
-        socketInstance.off('notification');
-        socketInstance.off('paymentSubmission');
-        socketInstance.disconnect();
-      }
+      socketInstance.off('connect');
+      socketInstance.off('transport');
+      socketInstance.off('disconnect');
+      socketInstance.off('connect_error');
+      socketInstance.off('reconnect_attempt');
+      socketInstance.off('reconnect');
+      socketInstance.off('reconnect_failed');
+      socketInstance.off('participationDeleted');
+      socketInstance.off('participationCreated');
+      socketInstance.off('participationUpdated');
+      socketInstance.off('slotCreated');
+      socketInstance.off('slotUpdated');
+      socketInstance.off('slotDeleted');
+      socketInstance.off('pricesUpdated');
+      socketInstance.off('notification');
+      socketInstance.off('paymentSubmission');
+      socketInstance.disconnect();
       setConnected(false);
     };
-  }, [socket]); // Added socket as a dependency here
+  }, []); // Removed socket from dependencies
 
   const emit = useCallback(
     (event, data) => {
