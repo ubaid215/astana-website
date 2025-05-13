@@ -89,8 +89,8 @@ export default function AdminPaymentsPage() {
       return screenshot;
     }
     
-    // Handle relative paths or filenames
-    const cleanPath = screenshot.replace(/^\/+/, ''); // Remove leading slashes
+    // Remove leading slashes and '/uploads/' if present
+    const cleanPath = screenshot.replace(/^\/*(uploads\/)?/, '');
     const url = `${BASE_URL}/uploads/${cleanPath}`;
     
     // Log for debugging
@@ -242,13 +242,16 @@ function PaymentNotifications({ notifications }) {
   const getScreenshotUrl = (screenshot) => {
     if (!screenshot) return null;
     
+    // Check if the URL is already absolute
     if (screenshot.startsWith('http://') || screenshot.startsWith('https://')) {
       return screenshot;
     }
     
-    const cleanPath = screenshot.replace(/^\/+/, '');
+    // Remove leading slashes and '/uploads/' if present
+    const cleanPath = screenshot.replace(/^\/*(uploads\/)?/, '');
     const url = `${BASE_URL}/uploads/${cleanPath}`;
     
+    // Log for debugging
     console.log('[PaymentNotifications] Generated screenshot URL:', url, 'from:', screenshot);
     
     return url;
