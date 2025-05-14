@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select';
-import { TIME_SLOTS, generateRandomTimeSlot } from '@/lib/utils';
+import { TIME_SLOTS } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { useSocket } from '@/hooks/useSocket';
 
@@ -24,20 +24,19 @@ export default function ParticipationForm() {
     members: [''],
     totalAmount: 0,
   });
+  const [availableSlots, setAvailableSlots] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [isTermsAccepted, setIsTermsAccepted] = useState(false);
   const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
   const [termsLanguage, setTermsLanguage] = useState('Urdu');
 
-  // Fetch prices on initial load if not already in state
+  // Fetch prices on initial load
   useEffect(() => {
     const fetchPrices = async () => {
       try {
         const res = await fetch('/api/admin/prices');
-        if (!res.ok) {
-          throw new Error('Failed to fetch prices');
-        }
+        if (!res.ok) throw new Error('Failed to fetch prices');
         const data = await res.json();
         console.log('[ParticipationForm] Fetched initial prices:', data);
         setPrices(data);
@@ -46,37 +45,136 @@ export default function ParticipationForm() {
       }
     };
 
-    if (!prices) {
-      fetchPrices();
-    }
+    if (!prices) fetchPrices();
   }, [prices, setPrices]);
 
-  // Listen for price updates via Socket.IO
+  // Fetch available slots
+  useEffect(() => {
+    const fetchAvailableSlots = async () => {
+      try {
+        const res = await fetch('/api/slots/available', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            day: formData.day,
+            cowQuality: formData.cowQuality,
+            country: formData.country,
+          }),
+        });
+        if (!res.ok) throw new Error('Failed to fetch available slots');
+        const data = await res.json();
+        setAvailableSlots(data.availableSlots || TIME_SLOTS);
+        console.log('[ParticipationForm] Fetched available slots:', data);
+        // Reset timeSlot if it's no longer available
+        if (formData.timeSlot && !data.availableSlots.includes(formData.timeSlot)) {
+          setFormData((prev) => ({ ...prev, timeSlot: '' }));
+          setError('Selected time slot is no longer available. Please choose another.');
+        }
+      } catch (err) {
+        console.error('[ParticipationForm] Failed to fetch available slots:', err);
+        setAvailableSlots(TIME_SLOTS);
+      }
+    };
+
+    if (formData.day && formData.cowQuality && formData.country) {
+      fetchAvailableSlots();
+    }
+  }, [formData.day, formData.cowQuality, formData.country]);
+
+  // Listen for price and slot updates via Socket.IO
   useEffect(() => {
     if (socket) {
-      console.log('[ParticipationForm] Setting up Socket.IO listener for pricesUpdated event');
-      
       socket.on('pricesUpdated', (newPrices) => {
         console.log('[ParticipationForm] Prices updated via Socket.IO:', newPrices);
         setPrices(newPrices);
       });
 
+      socket.on('slotCreated', (newSlot) => {
+        if (
+          newSlot.day === parseInt(formData.day) &&
+          newSlot.cowQuality === formData.cowQuality &&
+          newSlot.country === formData.country
+        ) {
+          setAvailableSlots((prev) => {
+            const totalShares = newSlot.participants.reduce((sum, p) => sum + p.shares, 0);
+            if (totalShares >= 7) {
+              return prev.filter((slot) => slot !== newSlot.timeSlot);
+            }
+            return prev.includes(newSlot.timeSlot) ? prev : [...prev, newSlot.timeSlot].sort();
+          });
+        } else if (
+          newSlot.day === parseInt(formData.day) &&
+          newSlot.country === formData.country
+        ) {
+          setAvailableSlots((prev) => prev.filter((slot) => slot !== newSlot.timeSlot));
+        }
+        // Check if current timeSlot is still valid
+        if (formData.timeSlot === newSlot.timeSlot) {
+          const fetchAvailableSlots = async () => {
+            try {
+              const res = await fetch('/api/slots/available', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  day: formData.day,
+                  cowQuality: formData.cowQuality,
+                  country: formData.country,
+                }),
+              });
+              if (!res.ok) throw new Error('Failed to fetch available slots');
+              const data = await res.json();
+              if (!data.availableSlots.includes(formData.timeSlot)) {
+                setFormData((prev) => ({ ...prev, timeSlot: '' }));
+                setError('Selected time slot is no longer available. Please choose another.');
+              }
+            } catch (err) {
+              console.error('[ParticipationForm] Failed to refresh slots:', err);
+            }
+          };
+          fetchAvailableSlots();
+        }
+      });
+
+      socket.on('slotDeleted', ({ slotId }) => {
+        const fetchAvailableSlots = async () => {
+          try {
+            const res = await fetch('/api/slots/available', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                day: formData.day,
+                cowQuality: formData.cowQuality,
+                country: formData.country,
+              }),
+            });
+            if (!res.ok) throw new Error('Failed to fetch available slots');
+            const data = await res.json();
+            setAvailableSlots(data.availableSlots || TIME_SLOTS);
+          } catch (err) {
+            console.error('[ParticipationForm] Failed to refresh slots:', err);
+          }
+        };
+        if (formData.day && formData.cowQuality && formData.country) {
+          fetchAvailableSlots();
+        }
+      });
+
       return () => {
-        console.log('[ParticipationForm] Cleaning up Socket.IO listener');
         socket.off('pricesUpdated');
+        socket.off('slotCreated');
+        socket.off('slotDeleted');
       };
     }
-  }, [socket, setPrices]);
+  }, [socket, setPrices, formData.day, formData.cowQuality, formData.country, formData.timeSlot]);
 
-  // Update total amount when prices, cow quality, or shares change
+  // Update total amount
   useEffect(() => {
     if (prices && formData.cowQuality && formData.shares) {
       const priceKey = formData.cowQuality.toLowerCase();
       if (prices[priceKey]) {
-        const price = prices[priceKey];
         setFormData((prev) => ({
           ...prev,
-          totalAmount: price * formData.shares,
+          totalAmount: prices[priceKey] * formData.shares,
         }));
       }
     }
@@ -84,10 +182,17 @@ export default function ParticipationForm() {
 
   const handleSharesChange = (value) => {
     const shares = parseInt(value) || 1;
+    if (formData.timeSlot === '03:00 PM - 04:00 PM' && shares > 7) {
+      setError('For the 03:00 PM - 04:00 PM time slot, a maximum of 7 shares is allowed.');
+      return;
+    }
+    setError('');
     setFormData((prev) => ({
       ...prev,
-      shares,
-      members: Array(shares).fill('').map((_, i) => prev.members[i] || ''),
+      shares: formData.timeSlot === '03:00 PM - 04:00 PM' ? Math.min(shares, 7) : shares,
+      members: Array(formData.timeSlot === '03:00 PM - 04:00 PM' ? Math.min(shares, 7) : shares)
+        .fill('')
+        .map((_, i) => prev.members[i] || ''),
     }));
   };
 
@@ -99,11 +204,19 @@ export default function ParticipationForm() {
   };
 
   const handleTimeSlotChange = (value) => {
-    const timeSlot = value === '' ? generateRandomTimeSlot() : value;
     setFormData((prev) => ({
       ...prev,
-      timeSlot
+      timeSlot: value,
     }));
+    setError(''); // Clear any previous errors
+    // Reset shares to 1 if switching to 03:00 PM - 04:00 PM to enforce the limit
+    if (value === '03:00 PM - 04:00 PM' && formData.shares > 7) {
+      setFormData((prev) => ({
+        ...prev,
+        shares: 7,
+        members: Array(7).fill('').map((_, i) => prev.members[i] || ''),
+      }));
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -121,28 +234,27 @@ export default function ParticipationForm() {
       return;
     }
 
-    let submissionData = { ...formData };
-    if (!submissionData.timeSlot) {
-      submissionData.timeSlot = generateRandomTimeSlot();
-    }
-
     setLoading(true);
     try {
       const res = await fetch('/api/participation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...submissionData,
+          ...formData,
           userId: session.user.id,
         }),
       });
-      
+
       if (!res.ok) {
         const errorData = await res.json();
-        throw new Error(errorData.error || 'Submission failed');
+        if (errorData.error.includes('Not enough capacity') || errorData.error.includes('No available slots')) {
+          setError(errorData.error);
+        } else {
+          throw new Error(errorData.error || 'Submission failed');
+        }
+      } else {
+        router.push('/profile');
       }
-      
-      router.push('/profile');
     } catch (err) {
       setError(err.message || 'Server error');
     } finally {
@@ -155,7 +267,7 @@ export default function ParticipationForm() {
 میں شکیل احمد ولد محمد عبدالغفور کو بیرون ملک یعنی پاکستان میں اپنی قربانی اور قربانی سے متعلق کسی بھی طرح کا خرچ ( مثلا سلائر باؤس یا قصاب اور مسلمانوں تک اپنی قربانی کا گوشت بحفاظت پہنچانے کے لئے کرائے وغیرہ کے اخراجات کرنے اور قربانی کے جانور کے گوشت چربی وغیرہ جس کے کھانے کا معمول ہے چھوڑی نہیں جاتی، اس میں سے میرے حصے کے مطابق گوشت وغیرہ مسلمانوں میں سے جسے چاہے جیسے چاہے تقسیم کرنے، ایسی چربی و ہڈی جونہ کھائی جاتی اور نہ پکائی جاتی ہے، اسے اگر بیچنے کی ضرورت پڑےبیچ کر حاصل ہونے والی رقم قربانی کے جانور کی کھال اور قربانی میں سے بچی ہوئی رقم خانقاہ عالیہ کو دینے کا وکیل مطلق یعنی ایسا با اختیار نائب بناتا ہوں کہ مذکورہ تمام کام وہ خود سر انجام دیں یا کسی اور کو اسی طرح کا با اختیار کر کے سونپ دیں ۔ اگر میرے حصے والی قربانی کا جانور کسی حادثے یا مرض وغیرہ کے سبب قربانی کے قابل نہ رہا یا کسی وجہ سے مر گیا یا خریداری کے لئے جاتے ہوئے منڈی میں رقم چھن جانیکی صورت میں جانور خریدا ہی نہ جا سکا تو مجھے زندہ یا مردہ جانور کی اطلاع دی جائے اور آئندہ کے معاملات میری اجازت سے طے کئے جائیں، آپ کے ہاتھ میں میری رقم امانت ہے ، اگر بلا کسی غلط استعمال کے آپ سے رقم یا جانور ضائع ہو گیا تو اس کا تاوان آپ کے ذمہ نہ ہو گا اور میں مطالبہ نہ کروں گا۔  
 اگر کسی حصہ دار کا قربانی سے قبل خدانخواستہ انتقال ہو جائے تو اس کے انتقال کی اطلاع خانقاہ عالیہ کو ضرور دی جائے تاکہ آگے کے معاملات دار الافتاء  سے رہنمائی لیکر طے کئے جاسکیں۔ 
 نوٹ : قربانی کے جانوروں کے ذبح کی خدمات شرعی تقاضوں کے مطابق ذبح کے معاملات مجلس کی نگرانی میں ہونگے ۔ 
-وکالت نامے کے حوالے سے اگر کوئی وضاحت درکار ہو تو لکھ کر واٹس ایپ کر دیں ۔ مجلس شرعی رہنمائی لینے کے بعد آپ کو اس کا جواب دے گی۔ 
+Ludlow وکالت نامے کے حوالے سے اگر کوئی وضاحت درکار ہو تو لکھ کر واٹس ایپ کر دیں ۔ مجلس شرعی رہنمائی لینے کے بعد آپ کو اس کا جواب دے گی۔ 
 نوٹ: اجتماعی قربانی کیلئے بکنگ کرنے کی آخری تاریخ 03 جون 2025 ہے یاد رہے ! اس تاریخ کے بعد کوئی بھی بکنگ نہیں کی جائے گی
 ان شاء اللہ کریم
 `;
@@ -250,8 +362,8 @@ For any clarification regarding this authorization letter, please send a written
                   <SelectValue placeholder="Select time slot" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Random Time Slot</SelectItem>
-                  {TIME_SLOTS.map((slot) => (
+                  <SelectItem value="">Assign Automatically</SelectItem>
+                  {availableSlots.map((slot) => (
                     <SelectItem key={slot} value={slot}>{slot}</SelectItem>
                   ))}
                 </SelectContent>
@@ -267,7 +379,7 @@ For any clarification regarding this authorization letter, please send a written
                 required
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select day" value={formData.day?.toString()} />
+                  <SelectValue placeholder="Select day" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="1">Day 1</SelectItem>
@@ -275,7 +387,6 @@ For any clarification regarding this authorization letter, please send a written
                 </SelectContent>
               </Select>
             </div>
-
             <div>
               <label htmlFor="shares" className="block text-sm font-medium">Number of Shares</label>
               <Input
@@ -361,10 +472,9 @@ For any clarification regarding this authorization letter, please send a written
         </div>
       </div>
 
-      {/* Terms and Conditions Modal */}
       {isTermsModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded  rounded-xl shadow-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
             <h3 className="text-2xl font-bold text-primary mb-4">Terms and Conditions</h3>
             <div className="mb-4 flex space-x-2">
               <button

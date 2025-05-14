@@ -137,7 +137,7 @@ export default function AdminPaymentsPage() {
   });
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 ml-24">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Payment Management</h1>
         <div className="flex space-x-2">
