@@ -128,7 +128,6 @@ export default function SlotTable({ initialSlots, day }) {
           <TableRow>
             <TableHead>Time Slot</TableHead>
             <TableHead>Cow Quality</TableHead>
-            <TableHead>Country</TableHead>
             <TableHead>Collector Name</TableHead>
             <TableHead>Participant Names</TableHead>
             <TableHead>Shares</TableHead>
@@ -141,7 +140,6 @@ export default function SlotTable({ initialSlots, day }) {
               <TableRow key={slot._id}>
                 <TableCell>{slot.timeSlot}</TableCell>
                 <TableCell>{slot.cowQuality}</TableCell>
-                <TableCell>{slot.country}</TableCell>
                 <TableCell>
                   {slot.participants.map(p => p.collectorName).join(', ')}
                 </TableCell>
@@ -170,7 +168,7 @@ export default function SlotTable({ initialSlots, day }) {
             ))
           ) : (
             <TableRow>
-              <TableCell colSpan={isAdmin ? 7 : 6} className="text-center py-8">
+              <TableCell colSpan={isAdmin ? 6 : 5} className="text-center py-8">
                 No slots assigned for Day {day}
               </TableCell>
             </TableRow>
@@ -180,5 +178,3 @@ export default function SlotTable({ initialSlots, day }) {
     </div>
   );
 }
-
-export const dynamic = 'force-dynamic';

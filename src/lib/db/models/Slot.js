@@ -6,12 +6,16 @@ console.log('[Slot Model] Mongoose state:', {
   modelsDefined: !!mongoose.models,
 });
 
+// Clear cached Slot model to prevent using old schema
+if (mongoose.models.Slot) {
+  delete mongoose.models.Slot;
+}
+
 // Define the Slot schema
 const SlotSchema = new mongoose.Schema({
   timeSlot: { type: String, required: true },
   day: { type: Number, enum: [1, 2], required: true },
   cowQuality: { type: String, enum: ['Standard', 'Medium', 'Premium'], required: true },
-  country: { type: String, required: true },
   participants: [
     {
       participationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Participation' },
@@ -30,9 +34,7 @@ SlotSchema.pre('save', function (next) {
   next();
 });
 
-// Export the model with a safeguard
-const SlotModel = mongoose.models && mongoose.models.Slot 
-  ? mongoose.models.Slot 
-  : mongoose.model('Slot', SlotSchema);
+// Export the model
+const SlotModel = mongoose.model('Slot', SlotSchema);
 
 export default SlotModel;

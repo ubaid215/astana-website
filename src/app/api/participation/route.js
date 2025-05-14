@@ -35,20 +35,6 @@ export async function POST(req) {
       console.log('[API] Shares > 7, clearing timeSlot');
     }
 
-    if (data.timeSlot && data.shares <= 7) {
-      const existing = await Participation.find({
-        timeSlot: data.timeSlot,
-        day: data.day,
-        cowQuality: data.cowQuality,
-        slotAssigned: true,
-      });
-      const totalShares = existing.reduce((sum, p) => sum + p.shares, 0);
-      if (totalShares + data.shares > 7) {
-        console.log('[API] Time slot full:', { timeSlot: data.timeSlot, totalShares, newShares: data.shares });
-        return NextResponse.json({ error: 'Selected time slot is full' }, { status: 400 });
-      }
-    }
-
     const participation = new Participation({
       ...data,
       userId: token.sub,

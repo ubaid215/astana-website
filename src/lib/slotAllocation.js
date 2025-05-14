@@ -18,7 +18,7 @@ export async function allocateSlot(participation) {
   const slots = [];
   let remainingShares = participation.shares;
   let remainingParticipants = [...(participation.members || [])];
-  const { day, cowQuality, country, collectorName, _id } = participation;
+  const { day, cowQuality, collectorName, _id } = participation;
   let preferredTimeSlot = participation.timeSlot;
 
   console.log('[allocateSlot] Starting allocation', {
@@ -27,7 +27,6 @@ export async function allocateSlot(participation) {
     participantNames: remainingParticipants,
     day,
     cowQuality,
-    country,
     preferredTimeSlot,
   });
 
@@ -38,7 +37,7 @@ export async function allocateSlot(participation) {
     let availableSlots = [];
     
     for (const timeSlot of TIME_SLOTS[day]) {
-      const existingSlot = await Slot.findOne({ timeSlot, day, country });
+      const existingSlot = await Slot.findOne({ timeSlot, day });
       if (!existingSlot) {
         totalAvailableCapacity += 7; // New slot can hold 7 shares
         availableSlotCount++;
@@ -61,7 +60,6 @@ export async function allocateSlot(participation) {
     // Check if we need multiple slots but only one is available
     const needsMultipleSlots = remainingShares > 7;
     if (needsMultipleSlots && availableSlotCount < 2) {
-      // Not enough slots available to allocate all members
       return {
         hasEnoughCapacity: totalAvailableCapacity >= remainingShares,
         hasEnoughSlots: false,
@@ -87,7 +85,7 @@ export async function allocateSlot(participation) {
 
   // Helper function to check if a time slot is available for the given cow quality
   const isTimeSlotAvailable = async (timeSlot, targetCowQuality, sharesToAllocate) => {
-    const existingSlot = await Slot.findOne({ timeSlot, day, country });
+    const existingSlot = await Slot.findOne({ timeSlot, day });
     if (existingSlot) {
       // Check if the slot is assigned to a different cow quality
       if (existingSlot.cowQuality !== targetCowQuality) {
@@ -101,7 +99,7 @@ export async function allocateSlot(participation) {
       // Check available capacity
       const totalShares = existingSlot.participants.reduce((sum, p) => sum + p.shares, 0);
       const availableCapacity = 7 - totalShares;
-      return { available: availableCapacity >= sharesToAllocate, capacity: availableCapacity };
+      return { available: availableCapacity >= 1, capacity: availableCapacity }; // Allow partial allocation
     }
     // If no slot exists, it's available
     return { available: true, capacity: 7 };
@@ -109,11 +107,12 @@ export async function allocateSlot(participation) {
 
   // Helper function to find or create a slot
   const assignToSlot = async (timeSlot, sharesToAllocate, participantsToAllocate) => {
-    let slot = await Slot.findOne({ timeSlot, day, cowQuality, country });
+    let slot = await Slot.findOne({ timeSlot, day, cowQuality });
     if (slot) {
       const totalShares = slot.participants.reduce((sum, p) => sum + p.shares, 0);
-      if (totalShares + sharesToAllocate <= 7) {
-        console.log('[allocateSlot] Adding to existing slot', { slotId: slot._id, timeSlot });
+      const availableCapacity = 7 - totalShares;
+      if (availableCapacity >= sharesToAllocate) {
+        console.log('[allocateSlot] Adding to existing slot', { slotId: slot._id, timeSlot, sharesToAllocate });
         slot.participants.push({
           participationId: _id,
           collectorName,
@@ -135,12 +134,11 @@ export async function allocateSlot(participation) {
         console.log('[allocateSlot] Skipping slot creation due to cow quality conflict or full capacity', { timeSlot });
         return null;
       }
-      console.log('[allocateSlot] Creating new slot', { timeSlot });
+      console.log('[allocateSlot] Creating new slot', { timeSlot, sharesToAllocate });
       const newSlot = new Slot({
         timeSlot,
         day,
         cowQuality,
-        country,
         participants: [
           {
             participationId: _id,
@@ -163,65 +161,58 @@ export async function allocateSlot(participation) {
 
   // Main allocation loop
   while (remainingShares > 0) {
-    const sharesToAllocateInitial = Math.min(remainingShares, 7);
-    let sharesToAllocate = sharesToAllocateInitial;
-    const participantsToAllocate = remainingParticipants.slice(0, sharesToAllocate);
     let allocated = false;
 
-    // Try to allocate to the preferred time slot first, if provided and not yet used
-    if (preferredTimeSlot && TIME_SLOTS[day].includes(preferredTimeSlot)) {
-      const availability = await isTimeSlotAvailable(preferredTimeSlot, cowQuality, sharesToAllocate);
+    // Try to allocate to the preferred time slot first, if provided and not yet fully used
+    if (preferredTimeSlot && TIME_SLOTS[day].includes(preferredTimeSlot) && remainingShares > 0) {
+      const availability = await isTimeSlotAvailable(preferredTimeSlot, cowQuality, 1); // Check for any capacity
       if (availability.available) {
         // Allocate as many shares as possible to the preferred slot
-        sharesToAllocate = Math.min(sharesToAllocate, availability.capacity);
-        const participantsForPreferred = remainingParticipants.slice(0, sharesToAllocate);
-        const slot = await assignToSlot(preferredTimeSlot, sharesToAllocate, participantsForPreferred);
+        const sharesToAllocate = Math.min(remainingShares, availability.capacity);
+        const participantsToAllocate = remainingParticipants.slice(0, sharesToAllocate);
+        const slot = await assignToSlot(preferredTimeSlot, sharesToAllocate, participantsToAllocate);
         if (slot) {
           slots.push(slot);
           remainingShares -= sharesToAllocate;
           remainingParticipants = remainingParticipants.slice(sharesToAllocate);
           allocated = true;
-          // Only clear preferredTimeSlot if all shares are allocated
-          if (remainingShares === 0) {
+          // Only clear preferredTimeSlot if the slot is full or all shares are allocated
+          if (availability.capacity <= sharesToAllocate || remainingShares === 0) {
             preferredTimeSlot = null;
           }
         } else {
           console.log('[allocateSlot] Failed to assign to preferred slot', { preferredTimeSlot });
+          preferredTimeSlot = null; // Move to other slots if assignment fails
         }
       } else {
-        console.log('[allocateSlot] Preferred time slot unavailable', {
+        console.log('[allocateSlot] Preferred time slot unavailable or full', {
           preferredTimeSlot,
-          reason: 'Cow quality conflict or full capacity',
+          reason: 'Cow quality conflict or no capacity',
         });
-        // Clear preferredTimeSlot to try other slots
-        preferredTimeSlot = null;
+        preferredTimeSlot = null; // Move to other slots
       }
     }
 
     // If there are still shares to allocate, prioritize partially filled slots (earlier first)
     if (!allocated && remainingShares > 0) {
-      sharesToAllocate = Math.min(remainingShares, 7);
-      const participantsToAllocate = remainingParticipants.slice(0, sharesToAllocate);
-
-      // Check for partially filled slots
-      const existingSlots = await Slot.find({ day, cowQuality, country }).sort({ timeSlot: 1 });
+      const existingSlots = await Slot.find({ day, cowQuality }).sort({ timeSlot: 1 });
       for (const slot of existingSlots) {
         const totalShares = slot.participants.reduce((sum, p) => sum + p.shares, 0);
         const availableCapacity = 7 - totalShares;
         if (availableCapacity > 0) {
-          const sharesForThisSlot = Math.min(sharesToAllocate, availableCapacity);
-          const participantsForThisSlot = remainingParticipants.slice(0, sharesForThisSlot);
-          console.log('[allocateSlot] Filling existing slot', { slotId: slot._id, timeSlot: slot.timeSlot });
+          const sharesToAllocate = Math.min(remainingShares, availableCapacity);
+          const participantsToAllocate = remainingParticipants.slice(0, sharesToAllocate);
+          console.log('[allocateSlot] Filling existing slot', { slotId: slot._id, timeSlot: slot.timeSlot, sharesToAllocate });
           slot.participants.push({
             participationId: _id,
             collectorName,
-            participantNames: participantsForThisSlot,
-            shares: sharesForThisSlot,
+            participantNames: participantsToAllocate,
+            shares: sharesToAllocate,
           });
           await slot.save();
           slots.push(slot);
-          remainingShares -= sharesForThisSlot;
-          remainingParticipants = remainingParticipants.slice(sharesForThisSlot);
+          remainingShares -= sharesToAllocate;
+          remainingParticipants = remainingParticipants.slice(sharesToAllocate);
           allocated = true;
           break;
         }
@@ -230,12 +221,11 @@ export async function allocateSlot(participation) {
 
     // If no existing slots have capacity, try creating a new slot in order
     if (!allocated && remainingShares > 0) {
-      sharesToAllocate = Math.min(remainingShares, 7);
-      const participantsToAllocate = remainingParticipants.slice(0, sharesToAllocate);
-
       for (const timeSlot of TIME_SLOTS[day]) {
-        const availability = await isTimeSlotAvailable(timeSlot, cowQuality, sharesToAllocate);
+        const availability = await isTimeSlotAvailable(timeSlot, cowQuality, 1); // Check for any capacity
         if (availability.available) {
+          const sharesToAllocate = Math.min(remainingShares, availability.capacity || 7);
+          const participantsToAllocate = remainingParticipants.slice(0, sharesToAllocate);
           const slot = await assignToSlot(timeSlot, sharesToAllocate, participantsToAllocate);
           if (slot) {
             slots.push(slot);
@@ -251,10 +241,9 @@ export async function allocateSlot(participation) {
     if (!allocated) {
       console.error('[allocateSlot] No available slots for allocation', {
         participationId: _id,
-        sharesToAllocate,
+        remainingShares,
         day,
         cowQuality,
-        country,
       });
       throw new Error('No available slots for remaining shares. Please try another day or cow quality.');
     }

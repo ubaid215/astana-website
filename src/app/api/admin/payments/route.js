@@ -43,6 +43,19 @@ export async function PATCH(req) {
 
     await connectDB();
 
+    // Safeguard: Reload Slot model to ensure it uses the latest schema without country
+    if (mongoose.models.Slot) {
+      const slotSchemaFields = Object.keys(mongoose.model('Slot').schema.paths);
+      console.log('[Admin Payments API] Slot schema fields:', slotSchemaFields);
+      if (slotSchemaFields.includes('country')) {
+        console.warn('[Admin Payments API] Slot schema still includes country. Reloading Slot model...');
+        delete mongoose.models.Slot;
+        delete mongoose.modelSchemas.Slot;
+        await import('@/lib/db/models/Slot'); // Re-import to register new model
+        console.log('[Admin Payments API] Reloaded Slot schema fields:', Object.keys(mongoose.model('Slot').schema.paths));
+      }
+    }
+
     const schemaEnum = mongoose.model('Participation').schema.paths.paymentStatus.options.enum;
     console.log('[Admin Payments API] paymentStatus enum values:', schemaEnum);
 
@@ -92,6 +105,7 @@ export async function PATCH(req) {
           participationId,
           error: slotError.message,
         });
+        throw slotError; // Re-throw to ensure error is propagated
       }
     } else if (status === 'Rejected' || status === 'Pending') {
       if (participation.slotId) {
@@ -145,6 +159,6 @@ export async function PATCH(req) {
       message: error.message,
       stack: error.stack,
     });
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Server error' }, { status: 500 });
   }
 }

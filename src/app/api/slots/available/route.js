@@ -6,14 +6,14 @@ import { NextResponse } from 'next/server';
 export async function POST(req) {
   try {
     await connectDB();
-    const { day, cowQuality, country } = await req.json();
+    const { day, cowQuality } = await req.json();
 
-    if (!day || !cowQuality || !country) {
+    if (!day || !cowQuality) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Find all slots for the given day and country
-    const slots = await Slot.find({ day, country });
+    // Find all slots for the given day
+    const slots = await Slot.find({ day });
 
     // Identify time slots that are available for the selected cow quality
     const availableSlots = TIME_SLOTS[day].filter((timeSlot) => {
