@@ -21,7 +21,6 @@ export default function AdminPaymentsPage() {
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('all');
 
-  // Base URL for screenshots (adjust for production)
   const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
 
   useEffect(() => {
@@ -51,21 +50,42 @@ export default function AdminPaymentsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participationId, status: newStatus }),
       });
-      
+
+      const contentType = res.headers.get('content-type');
       if (!res.ok) {
-        throw new Error(await res.text());
+        if (contentType && contentType.includes('application/json')) {
+          const error = await res.json();
+          throw new Error(error.message || 'Failed to update payment status');
+        } else {
+          const text = await res.text();
+          console.error('[AdminPaymentsPage] Non-JSON response:', text.slice(0, 100));
+          throw new Error('Server returned non-JSON response');
+        }
       }
 
+      const data = contentType && contentType.includes('application/json') 
+        ? await res.json() 
+        : {};
+
       setParticipations(prev =>
-        prev.map(p => 
-          p._id === participationId 
-            ? { ...p, paymentStatus: newStatus, paymentDate: new Date() } 
+        prev.map(p =>
+          p._id === participationId
+            ? {
+                ...p,
+                paymentStatus: newStatus,
+                paymentDate: new Date(),
+                slotId: newStatus === 'Completed' ? data.slots?.[0] || null : null,
+                timeSlot: newStatus === 'Completed' ? data.timeSlot || null : null,
+                slotAssigned: newStatus === 'Completed' && !!data.slots?.length,
+              }
             : p
         )
       );
+
+      console.log('[AdminPaymentsPage] Status updated:', { participationId, newStatus, slots: data.slots });
     } catch (err) {
-      console.error('Update failed:', err);
-      alert('Failed to update status');
+      console.error('[AdminPaymentsPage] Update failed:', err.message);
+      alert(`Failed to update status: ${err.message}`);
     }
   };
 
@@ -76,24 +96,20 @@ export default function AdminPaymentsPage() {
       });
       setNotifications([]);
     } catch (err) {
-      console.error('Failed to mark notifications as read:', err);
+      console.error('[AdminPaymentsPage] Failed to mark notifications as read:', err);
     }
   };
 
-  // Validate and format screenshot URL
   const getScreenshotUrl = (screenshot) => {
     if (!screenshot) return null;
     
-    // Check if the URL is already absolute
     if (screenshot.startsWith('http://') || screenshot.startsWith('https://')) {
       return screenshot;
     }
     
-    // Remove leading slashes and '/uploads/' if present
     const cleanPath = screenshot.replace(/^\/*(uploads\/)?/, '');
     const url = `${BASE_URL}/uploads/${cleanPath}`;
     
-    // Log for debugging
     console.log('[AdminPaymentsPage] Generated screenshot URL:', url, 'from:', screenshot);
     
     return url;
@@ -145,6 +161,9 @@ export default function AdminPaymentsPage() {
             <TableRow>
               <TableHead>Participation ID</TableHead>
               <TableHead>User</TableHead>
+              <TableHead>Collector Name</TableHead>
+              <TableHead>Cow Quality</TableHead>
+              <TableHead>Time Slot</TableHead>
               <TableHead>Amount</TableHead>
               <TableHead>Date</TableHead>
               <TableHead>Status</TableHead>
@@ -160,6 +179,9 @@ export default function AdminPaymentsPage() {
                   <TableRow key={p._id}>
                     <TableCell className="font-medium">{p._id}</TableCell>
                     <TableCell>{p.userId?.name || 'Unknown'}</TableCell>
+                    <TableCell>{p.collectorName || 'N/A'}</TableCell>
+                    <TableCell>{p.cowQuality || 'N/A'}</TableCell>
+                    <TableCell>{p.timeSlot || 'Not Assigned'}</TableCell>
                     <TableCell>PKR {p.totalAmount.toLocaleString()}</TableCell>
                     <TableCell>
                       {p.paymentDate ? format(new Date(p.paymentDate), 'PP') : 'N/A'}
@@ -207,7 +229,7 @@ export default function AdminPaymentsPage() {
               })
             ) : (
               <TableRow>
-                <TableCell colSpan={7} className="text-center">
+                <TableCell colSpan={10} className="text-center">
                   No payments found
                 </TableCell>
               </TableRow>
@@ -238,20 +260,16 @@ export default function AdminPaymentsPage() {
 function PaymentNotifications({ notifications }) {
   const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
 
-  // Validate and format screenshot URL
   const getScreenshotUrl = (screenshot) => {
     if (!screenshot) return null;
     
-    // Check if the URL is already absolute
     if (screenshot.startsWith('http://') || screenshot.startsWith('https://')) {
       return screenshot;
     }
     
-    // Remove leading slashes and '/uploads/' if present
     const cleanPath = screenshot.replace(/^\/*(uploads\/)?/, '');
     const url = `${BASE_URL}/uploads/${cleanPath}`;
     
-    // Log for debugging
     console.log('[PaymentNotifications] Generated screenshot URL:', url, 'from:', screenshot);
     
     return url;

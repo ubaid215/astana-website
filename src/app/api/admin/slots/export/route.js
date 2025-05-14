@@ -1,4 +1,4 @@
-export const dynamic = 'force-dynamic'
+export const dynamic = 'force-dynamic';
 
 import connectDB from '@/lib/db/mongodb';
 import Slot from '@/lib/db/models/Slot';
@@ -19,281 +19,304 @@ export async function GET(req) {
     const slots = await Slot.find().sort({ day: 1, timeSlot: 1 });
     const format = req.nextUrl.searchParams.get('format') || 'json';
 
-    if (format === 'pdf') {
-      try {
-        // Create a new PDFDocument
-        const pdfDoc = await PDFDocument.create();
-        let font, boldFont;
-        try {
-          font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-          boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-        } catch (error) {
-          throw new Error('Failed to embed fonts: ' + error.message);
-        }
 
-        // Constants
-        const pageSize = { width: 595, height: 842 }; // A4 size in points
-        const margin = 40;
-        const lineHeight = 18;
-        const fontSize = { header: 16, tableHeader: 11, text: 9 };
-        const minColWidth = 80;
-        const maxColWidth = 150;
-        const colSpacing = 10;
+if (format === 'pdf') {
+  try {
+    const pdfDoc = await PDFDocument.create();
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-        // Initialize page
-        let page = pdfDoc.addPage([pageSize.width, pageSize.height]);
-        let y = pageSize.height - margin - 30;
-        let pageNumber = 1;
+    // Constants for layout
+    const pageSize = { width: 595, height: 842 }; // A4 size
+    const margin = 40;
+    const lineHeight = 16;
+    const fontSize = { 
+      header: 18, 
+      subHeader: 14, 
+      tableHeader: 10, 
+      text: 9,
+      participant: 8 
+    };
+    
+    // Column widths (adjusted for better participant display)
+    const colWidths = [120, 80, 80, 215]; // Time Slot, Cow Quality, Country, Participants
+    const colSpacing = 5;
+    const tablePadding = 4;
+    const participantLineHeight = 12;
+    const maxParticipants = 7; // Fixed number of participant rows
 
-        // Helper functions
-        const addNewPage = () => {
-          page.drawText(`Page ${pageNumber}`, {
-            x: pageSize.width - margin - 30,
-            y: margin - 15,
-            size: fontSize.text,
-            font,
-            color: rgb(0.5, 0.5, 0.5),
-          });
-          page = pdfDoc.addPage([pageSize.width, pageSize.height]);
-          y = pageSize.height - margin - 30;
-          pageNumber++;
-          return page;
-        };
+    // Initialize page
+    let page = pdfDoc.addPage([pageSize.width, pageSize.height]);
+    let y = pageSize.height - margin - 30;
+    let pageNumber = 1;
 
-        const cleanText = (text) => {
-          return text != null ? text.toString().replace(/[\n\r]+/g, ' ').trim() : '-';
-        };
+    // Helper functions
+    const addNewPage = () => {
+      page.drawText(`Page ${pageNumber}`, {
+        x: pageSize.width - margin - 30,
+        y: margin - 15,
+        size: fontSize.text,
+        font,
+        color: rgb(0.5, 0.5, 0.5),
+      });
+      page = pdfDoc.addPage([pageSize.width, pageSize.height]);
+      y = pageSize.height - margin - 30;
+      pageNumber++;
+      return page;
+    };
 
-        const wrapText = (text, maxWidth, font, size) => {
-          const cleanedText = cleanText(text);
-          const words = cleanedText.split(' ');
-          let lines = [];
-          let currentLine = '';
-          for (const word of words) {
-            const testLine = currentLine ? `${currentLine} ${word}` : word;
-            const width = font.widthOfTextAtSize(testLine, size);
-            if (width <= maxWidth) {
-              currentLine = testLine;
-            } else {
-              if (currentLine) lines.push(currentLine);
-              currentLine = word;
-            }
-          }
-          if (currentLine) lines.push(currentLine);
-          return lines;
-        };
+    const cleanText = (text) => {
+      return text != null ? text.toString().trim() : '';
+    };
 
-        // Process participants to extract correct field
-        const getParticipantsString = (participants) => {
-          if (!participants || !Array.isArray(participants)) return '-';
-          const names = participants.map(p => {
-            if (typeof p === 'string') return p;
-            if (p.collectorName) return p.collectorName;
-            if (p.members && Array.isArray(p.members)) return p.members.join(', ');
-            return '-';
-          }).filter(name => name && name !== '-');
-          return names.length > 0 ? names.join(', ') : '-';
-        };
+    // Modified to extract participant names with proper formatting
+    const getParticipantNames = (participants) => {
+      if (!participants || !Array.isArray(participants)) return Array(maxParticipants).fill('');
+      
+      // Flatten all participant names from all participation records
+      const allNames = participants
+        .flatMap(p => p.participantNames || [])
+        .filter(name => name && typeof name === 'string')
+        .map(name => cleanText(name));
+      
+      // Fill to 7 participants (empty strings if fewer than 7)
+      const filledNames = [...allNames];
+      while (filledNames.length < maxParticipants) {
+        filledNames.push('');
+      }
+      
+      return filledNames.slice(0, maxParticipants);
+    };
 
-        // Calculate dynamic column widths
-        const headers = ['Day', 'Time Slot', 'Cow Quality', 'Participants'];
-        const colWidths = headers.map(() => minColWidth);
-        slots.forEach((slot, index) => {
-          const row = [
-            slot.day != null ? slot.day.toString() : '-',
-            slot.timeSlot || '-',
-            slot.cowQuality != null ? slot.cowQuality.toString() : '-',
-            getParticipantsString(slot.participants),
-          ];
-          row.forEach((cell, i) => {
-            try {
-              const cleanedCell = cleanText(cell);
-              const textWidth = font.widthOfTextAtSize(cleanedCell, fontSize.text);
-              const headerWidth = font.widthOfTextAtSize(headers[i], fontSize.tableHeader);
-              colWidths[i] = Math.min(maxColWidth, Math.max(colWidths[i], textWidth, headerWidth));
-            } catch (error) {
-              console.error(`Error calculating width for column ${headers[i]} at slot index ${index}:`, {
-                cellValue: cell,
-                cellType: typeof cell,
-                error: error.message,
-              });
-              throw error;
-            }
-          });
+    // Add report title
+    page.drawText('Slots Report', {
+      x: margin,
+      y,
+      size: fontSize.header,
+      font: boldFont,
+      color: rgb(0, 0, 0),
+    });
+
+    // Add generation date
+    const date = new Date().toLocaleDateString('en-GB', { 
+      day: 'numeric', 
+      month: 'numeric', 
+      year: 'numeric' 
+    });
+    page.drawText(`Generated on: ${date}`, {
+      x: margin,
+      y: y - 20,
+      size: fontSize.subHeader,
+      font,
+      color: rgb(0.5, 0.5, 0.5),
+    });
+    y -= 40;
+
+    // Group slots by day
+    const slotsByDay = slots.reduce((acc, slot) => {
+      const day = slot.day || 'Unknown';
+      if (!acc[day]) acc[day] = [];
+      acc[day].push(slot);
+      return acc;
+    }, {});
+
+    // Process each day
+    for (const [day, daySlots] of Object.entries(slotsByDay).sort(([a], [b]) => Number(a) - Number(b))) {
+      // Check if we need a new page before adding day header
+      if (y - 60 < margin) {
+        addNewPage();
+      }
+
+      // Add day header
+      page.drawText(`Day ${day}:`, {
+        x: margin,
+        y,
+        size: fontSize.subHeader,
+        font: boldFont,
+        color: rgb(0, 0, 0),
+      });
+      y -= 25;
+
+      // Define table headers
+      const headers = ['Time Slot', 'Cow Quality', 'Country', 'Participant Names'];
+      const colPositions = [margin];
+      for (let i = 1; i < colWidths.length; i++) {
+        colPositions.push(colPositions[i - 1] + colWidths[i - 1] + colSpacing);
+      }
+
+      // Draw table headers
+      headers.forEach((header, i) => {
+        page.drawRectangle({
+          x: colPositions[i],
+          y: y - 2,
+          width: colWidths[i],
+          height: lineHeight,
+          color: rgb(0.9, 0.9, 0.9),
+          borderWidth: 0.5,
+          borderColor: rgb(0.2, 0.2, 0.2),
         });
-
-        // Adjust column widths to fit page
-        const totalContentWidth = colWidths.reduce((sum, w) => sum + w, 0) + (colWidths.length - 1) * colSpacing;
-        let scaleFactor = 1;
-        if (totalContentWidth > pageSize.width - 2 * margin) {
-          scaleFactor = (pageSize.width - 2 * margin) / totalContentWidth;
-          colWidths.forEach((_, i) => {
-            colWidths[i] = Math.max(minColWidth, colWidths[i] * scaleFactor);
-          });
-        }
-
-        // Calculate column positions
-        const colPositions = [margin];
-        for (let i = 1; i < colWidths.length; i++) {
-          colPositions.push(colPositions[i - 1] + colWidths[i - 1] + colSpacing);
-        }
-
-        // Add header
-        page.drawText('Slots Report', {
-          x: margin,
-          y,
-          size: fontSize.header,
+        page.drawText(header, {
+          x: colPositions[i] + tablePadding,
+          y: y + 2,
+          size: fontSize.tableHeader,
           font: boldFont,
           color: rgb(0, 0, 0),
         });
+      });
+      y -= lineHeight + 2;
 
-        // Add date
-        const date = new Date().toLocaleDateString();
-        page.drawText(`Generated on: ${date}`, {
-          x: margin,
-          y: y - 15,
-          size: fontSize.text,
-          font,
-          color: rgb(0.5, 0.5, 0.5),
-        });
-        y -= 40;
-
-        // Draw headers
-        const drawHeaders = () => {
+      // Draw table rows for each slot
+      for (const slot of daySlots.sort((a, b) => a.timeSlot.localeCompare(b.timeSlot))) {
+        // Check if we need a new page before adding this slot
+        const slotHeight = (maxParticipants * participantLineHeight) + 4;
+        if (y - slotHeight < margin) {
+          addNewPage();
+          // Redraw day header if we're continuing on a new page
+          page.drawText(`Day ${day}:`, {
+            x: margin,
+            y,
+            size: fontSize.subHeader,
+            font: boldFont,
+            color: rgb(0, 0, 0),
+          });
+          y -= 25;
+          // Redraw table headers
           headers.forEach((header, i) => {
             page.drawRectangle({
-              x: colPositions[i] - colSpacing / 2,
+              x: colPositions[i],
               y: y - 2,
-              width: colWidths[i] + colSpacing,
+              width: colWidths[i],
               height: lineHeight,
-              borderWidth: 1,
+              color: rgb(0.9, 0.9, 0.9),
+              borderWidth: 0.5,
               borderColor: rgb(0.2, 0.2, 0.2),
-              color: rgb(0.95, 0.95, 0.95),
             });
             page.drawText(header, {
-              x: colPositions[i] + 4,
-              y: y + 3,
+              x: colPositions[i] + tablePadding,
+              y: y + 2,
               size: fontSize.tableHeader,
               font: boldFont,
               color: rgb(0, 0, 0),
             });
           });
-        };
-        drawHeaders();
-        y -= lineHeight;
-
-        // Add header line
-        page.drawLine({
-          start: { x: margin, y: y + 5 },
-          end: { x: pageSize.width - margin, y: y + 5 },
-          thickness: 1,
-          color: rgb(0.2, 0.2, 0.2),
-        });
-        y -= 10;
-
-        // Add table rows
-        for (const slot of slots) {
-          const row = [
-            slot.day != null ? slot.day.toString() : '-',
-            slot.timeSlot || '-',
-            slot.cowQuality != null ? slot.cowQuality.toString() : '-',
-            getParticipantsString(slot.participants),
-          ];
-
-          let maxLines = 1;
-          row.forEach((cell, i) => {
-            const lines = wrapText(cell, colWidths[i], font, fontSize.text);
-            maxLines = Math.max(maxLines, lines.length);
-          });
-
-          if (y - (maxLines * lineHeight) < margin + 20) {
-            page.drawLine({
-              start: { x: margin, y: y + 10 },
-              end: { x: pageSize.width - margin, y: y + 10 },
-              thickness: 0.5,
-              color: rgb(0.7, 0.7, 0.7),
-            });
-            addNewPage();
-            drawHeaders();
-            y -= lineHeight;
-            page.drawLine({
-              start: { x: margin, y: y + 5 },
-              end: { x: pageSize.width - margin, y: y + 5 },
-              thickness: 1,
-              color: rgb(0.2, 0.2, 0.2),
-            });
-            y -= 10;
-          }
-
-          row.forEach((cell, i) => {
-            const lines = wrapText(cell, colWidths[i], font, fontSize.text);
-            lines.forEach((line, lineIndex) => {
-              page.drawText(line, {
-                x: colPositions[i],
-                y: y - (lineIndex * lineHeight),
-                size: fontSize.text,
-                font,
-                color: rgb(0, 0, 0),
-              });
-            });
-          });
-
-          colPositions.forEach((x, i) => {
-            page.drawLine({
-              start: { x: x - colSpacing / 2, y: y + 10 },
-              end: { x: x - colSpacing / 2, y: y - (maxLines * lineHeight) },
-              thickness: 0.5,
-              color: rgb(0.7, 0.7, 0.7),
-            });
-          });
-
-          page.drawLine({
-            start: { x: margin, y: y - (maxLines * lineHeight) + 10 },
-            end: { x: pageSize.width - margin, y: y - (maxLines * lineHeight) + 10 },
-            thickness: 0.5,
-            color: rgb(0.7, 0.7, 0.7),
-          });
-
-          y -= maxLines * lineHeight;
+          y -= lineHeight + 2;
         }
 
-        page.drawLine({
-          start: { x: margin, y: y + 10 },
-          end: { x: pageSize.width - margin, y: y + 10 },
-          thickness: 0.5,
-          color: rgb(0.7, 0.7, 0.7),
+        // Get slot data
+        const timeSlot = cleanText(slot.timeSlot) || '-';
+        const cowQuality = cleanText(slot.cowQuality) || '-';
+        const country = cleanText(slot.country) || '-';
+        const participants = getParticipantNames(slot.participants);
+
+        // Draw the slot row (spanning multiple lines for participants)
+        // First draw the cell borders
+        page.drawRectangle({
+          x: colPositions[0],
+          y: y - slotHeight,
+          width: colWidths[0],
+          height: slotHeight,
+          borderWidth: 0.5,
+          borderColor: rgb(0.2, 0.2, 0.2),
+        });
+        page.drawRectangle({
+          x: colPositions[1],
+          y: y - slotHeight,
+          width: colWidths[1],
+          height: slotHeight,
+          borderWidth: 0.5,
+          borderColor: rgb(0.2, 0.2, 0.2),
+        });
+        page.drawRectangle({
+          x: colPositions[2],
+          y: y - slotHeight,
+          width: colWidths[2],
+          height: slotHeight,
+          borderWidth: 0.5,
+          borderColor: rgb(0.2, 0.2, 0.2),
+        });
+        page.drawRectangle({
+          x: colPositions[3],
+          y: y - slotHeight,
+          width: colWidths[3],
+          height: slotHeight,
+          borderWidth: 0.5,
+          borderColor: rgb(0.2, 0.2, 0.2),
         });
 
-        page.drawText(`Page ${pageNumber}`, {
-          x: pageSize.width - margin - 30,
-          y: margin - 15,
+        // Fill Time Slot, Cow Quality, and Country cells (centered vertically)
+        page.drawText(timeSlot, {
+          x: colPositions[0] + tablePadding,
+          y: y - (slotHeight / 2) - (fontSize.text / 2),
           size: fontSize.text,
           font,
-          color: rgb(0.5, 0.5, 0.5),
+          color: rgb(0, 0, 0),
+        });
+        page.drawText(cowQuality, {
+          x: colPositions[1] + tablePadding,
+          y: y - (slotHeight / 2) - (fontSize.text / 2),
+          size: fontSize.text,
+          font,
+          color: rgb(0, 0, 0),
+        });
+        page.drawText(country, {
+          x: colPositions[2] + tablePadding,
+          y: y - (slotHeight / 2) - (fontSize.text / 2),
+          size: fontSize.text,
+          font,
+          color: rgb(0, 0, 0),
         });
 
-        const pdfBytes = await pdfDoc.save();
-        return new NextResponse(pdfBytes, {
-          headers: {
-            'Content-Type': 'application/pdf',
-            'Content-Disposition': 'attachment; filename=slots-report.pdf',
-          },
+        // Fill Participant Names (one per line)
+        participants.forEach((name, i) => {
+          page.drawText(name || '', {
+            x: colPositions[3] + tablePadding,
+            y: y - (i * participantLineHeight) - participantLineHeight,
+            size: fontSize.participant,
+            font,
+            color: rgb(0, 0, 0),
+          });
         });
-      } catch (error) {
-        console.error('PDF generation error:', error);
-        return NextResponse.json(
-          { error: 'Failed to generate PDF', details: error.message },
-          { status: 500 }
-        );
+
+        y -= slotHeight + 2;
       }
+
+      // Add extra space between days
+      y -= 15;
     }
+
+    // Add final page number
+    page.drawText(`Page ${pageNumber}`, {
+      x: pageSize.width - margin - 30,
+      y: margin - 15,
+      size: fontSize.text,
+      font,
+      color: rgb(0.5, 0.5, 0.5),
+    });
+
+    const pdfBytes = await pdfDoc.save();
+    return new NextResponse(pdfBytes, {
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': 'attachment; filename=slots-report.pdf',
+      },
+    });
+  } catch (error) {
+    console.error('PDF generation error:', error);
+    return NextResponse.json(
+      { error: 'Failed to generate PDF', details: error.message },
+      { status: 500 }
+    );
+  }
+}
+
 
     if (format === 'csv') {
       const csvData = slots.map((slot) => ({
         Day: slot.day != null ? slot.day.toString() : '',
         TimeSlot: slot.timeSlot || '',
         CowQuality: slot.cowQuality != null ? slot.cowQuality.toString() : '',
-        Participants: getParticipantsString(slot.participants),
+        Country: slot.country || '',
+        ParticipantNames: getParticipantNames(slot.participants),
       }));
 
       const csv = Papa.unparse(csvData, {
@@ -315,10 +338,11 @@ export async function GET(req) {
         const worksheet = workbook.addWorksheet('Slots');
 
         worksheet.columns = [
-          { header: 'Day', key: 'day', width: 15 },
+          { header: 'Day', key: 'day', width: 10 },
           { header: 'Time Slot', key: 'timeSlot', width: 15 },
           { header: 'Cow Quality', key: 'cowQuality', width: 15 },
-          { header: 'Participants', key: 'participants', width: 30 },
+          { header: 'Country', key: 'country', width: 15 },
+          { header: 'Participant Names', key: 'participantNames', width: 30 },
         ];
 
         slots.forEach(slot => {
@@ -326,7 +350,8 @@ export async function GET(req) {
             day: slot.day != null ? slot.day.toString() : '',
             timeSlot: slot.timeSlot || '',
             cowQuality: slot.cowQuality != null ? slot.cowQuality.toString() : '',
-            participants: getParticipantsString(slot.participants),
+            country: slot.country || '',
+            participantNames: getParticipantNames(slot.participants),
           });
         });
 

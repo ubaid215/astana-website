@@ -2,12 +2,12 @@ export const dynamic = 'force-dynamic';
 
 import connectDB from '@/lib/db/mongodb';
 import Participation from '@/lib/db/models/Participation';
+import Slot from '@/lib/db/models/Slot';
 import { NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import { getIO } from '@/lib/socket';
 import mongoose from 'mongoose';
-
-// Re-import the schema to ensure we're using the latest definition
+import { allocateSlot } from '@/lib/slotAllocation';
 import ParticipationSchema from '@/lib/db/models/Participation';
 
 export async function GET(req) {
@@ -43,15 +43,13 @@ export async function PATCH(req) {
 
     await connectDB();
 
-    // Debug: Log the schema's enum values for paymentStatus
     const schemaEnum = mongoose.model('Participation').schema.paths.paymentStatus.options.enum;
     console.log('[Admin Payments API] paymentStatus enum values:', schemaEnum);
 
-    // If 'Rejected' is not in the enum, there’s a schema mismatch
     if (!schemaEnum.includes('Rejected')) {
       console.warn('[Admin Payments API] Schema mismatch detected. Reloading Participation model...');
-      delete mongoose.models.Participation; // Clear cached model
-      mongoose.model('Participation', ParticipationSchema); // Reload model
+      delete mongoose.models.Participation;
+      mongoose.model('Participation', ParticipationSchema);
       console.log('[Admin Payments API] Reloaded schema enum:', mongoose.model('Participation').schema.paths.paymentStatus.options.enum);
     }
 
@@ -69,22 +67,79 @@ export async function PATCH(req) {
       return NextResponse.json({ error: 'Participation not found' }, { status: 404 });
     }
 
-    console.log('[Admin Payments API] Before update:', { _id: participation._id, paymentStatus: participation.paymentStatus });
+    console.log('[Admin Payments API] Before update:', { _id: participation._id, paymentStatus: participation.paymentStatus, slotId: participation.slotId });
+
     participation.paymentStatus = status;
     participation.paymentDate = new Date();
-    await participation.save();
-    console.log('[Admin Payments API] After update:', { _id: participation._id, paymentStatus: participation.paymentStatus });
 
-    // Emit Socket.io event
+    let slots = [];
+    let deletedSlotIds = [];
+
+    if (status === 'Completed') {
+      try {
+        slots = await allocateSlot(participation);
+        console.log('[Admin Payments API] Slot allocation result:', {
+          participationId,
+          slots: slots.map(s => s._id),
+        });
+        if (slots.length > 0) {
+          participation.slotId = slots[0]._id;
+          participation.timeSlot = slots[0].timeSlot;
+          participation.slotAssigned = true;
+        }
+      } catch (slotError) {
+        console.error('[Admin Payments API] Slot allocation failed:', {
+          participationId,
+          error: slotError.message,
+        });
+      }
+    } else if (status === 'Rejected' || status === 'Pending') {
+      if (participation.slotId) {
+        try {
+          const slotsToDelete = await Slot.find({
+            'participants.participationId': participationId,
+          });
+          deletedSlotIds = slotsToDelete.map(slot => slot._id);
+          await Slot.deleteMany({ 'participants.participationId': participationId });
+          console.log('[Admin Payments API] Deleted slots:', { participationId, deletedSlotIds });
+        } catch (deleteError) {
+          console.error('[Admin Payments API] Slot deletion failed:', {
+            participationId,
+            error: deleteError.message,
+          });
+        }
+      }
+      participation.slotId = null;
+      participation.timeSlot = null;
+      participation.slotAssigned = false;
+    }
+
+    await participation.save();
+    console.log('[Admin Payments API] After update:', { _id: participation._id, paymentStatus: participation.paymentStatus, slotId: participation.slotId });
+
     const io = getIO();
     if (io) {
       io.to('public').emit('paymentUpdate', participation);
       console.log('[Admin Payments API] Socket.io paymentUpdate emitted:', { participationId });
+
+      if (slots.length > 0) {
+        slots.forEach(slot => {
+          io.to('admin').emit('slotCreated', slot);
+          console.log('[Admin Payments API] Socket.io slotCreated emitted:', { slotId: slot._id });
+        });
+      }
+
+      if (deletedSlotIds.length > 0) {
+        deletedSlotIds.forEach(slotId => {
+          io.to('admin').emit('slotDeleted', { slotId });
+          console.log('[Admin Payments API] Socket.io slotDeleted emitted:', { slotId });
+        });
+      }
     } else {
-      console.warn('[Admin Payments API] Socket.io not initialized, skipping paymentUpdate');
+      console.warn('[Admin Payments API] Socket.io not initialized, skipping events');
     }
 
-    return NextResponse.json({ message: 'Payment status updated' }, { status: 200 });
+    return NextResponse.json({ message: 'Payment status updated', slots: slots.map(s => s._id), deletedSlotIds }, { status: 200 });
   } catch (error) {
     console.error('[Admin Payments API] Update payment status error:', {
       message: error.message,

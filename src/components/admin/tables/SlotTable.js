@@ -14,14 +14,33 @@ export default function SlotTable({ initialSlots, day }) {
   const isAdmin = status === 'authenticated' && session?.user?.isAdmin;
 
   useEffect(() => {
-    setSlots(initialSlots || []);
-  }, [initialSlots, setSlots]);
+    // Initialize slots with filtered initialSlots
+    const filteredInitial = initialSlots.filter(s => s.day === day);
+    setSlots(filteredInitial);
+    console.log('[SlotTable] Initialized slots for Day', day, filteredInitial);
+  }, [initialSlots, day, setSlots]);
 
   useEffect(() => {
     if (!socket || !connected) {
       console.warn('[SlotTable] Socket not connected, skipping event listeners');
       return;
     }
+
+    const handleSlotCreated = (newSlot) => {
+      console.log('[SlotTable] Slot created:', newSlot);
+      if (newSlot.day === day) {
+        setSlots((prevSlots) => {
+          const updatedSlots = [...prevSlots, newSlot];
+          // Sort by timeSlot for consistent display
+          return updatedSlots.sort((a, b) => a.timeSlot.localeCompare(b.timeSlot));
+        });
+        toast({
+          title: 'Slot Created',
+          description: `New slot added for ${newSlot.timeSlot} (${newSlot.cowQuality})`,
+          variant: 'success',
+        });
+      }
+    };
 
     const handleSlotDeleted = ({ slotId }) => {
       console.log('[SlotTable] Slot deleted:', slotId);
@@ -42,15 +61,17 @@ export default function SlotTable({ initialSlots, day }) {
       });
     };
 
+    socket.on('slotCreated', handleSlotCreated);
     socket.on('slotDeleted', handleSlotDeleted);
     socket.on('connect_error', handleConnectError);
 
     return () => {
+      socket.off('slotCreated', handleSlotCreated);
       socket.off('slotDeleted', handleSlotDeleted);
       socket.off('connect_error', handleConnectError);
       console.log('[SlotTable] Cleaned up socket event listeners');
     };
-  }, [socket, connected, setSlots, toast]);
+  }, [socket, connected, setSlots, toast, day]);
 
   const handleDeleteSlot = useCallback(
     async (slotId) => {
@@ -97,51 +118,65 @@ export default function SlotTable({ initialSlots, day }) {
     [handleDeleteSlot]
   );
 
-  const filteredSlots = slots.filter((s) => s.day === day);
+  const filteredSlots = slots.filter((s) => s.day === day).sort((a, b) => a.timeSlot.localeCompare(b.timeSlot));
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
+    <div className="bg-white rounded-lg shadow-md p-6 mb-6">
       <h2 className="text-xl font-semibold text-primary mb-4">Day {day} Slots</h2>
-      {filteredSlots.length > 0 ? (
-        filteredSlots.map((slot, index) => (
-          <div key={slot._id} className="mb-8 break-after-page">
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="text-lg font-semibold text-secondary">
-                Slot {index + 1}: {slot.timeSlot} - {slot.cowQuality} ({slot.country})
-              </h3>
-              {isAdmin && (
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => confirmDeleteSlot(slot._id)}
-                >
-                  Delete Slot
-                </Button>
-              )}
-            </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Collector Name</TableHead>
-                  <TableHead>Members</TableHead>
-                  <TableHead>Shares</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {slot.participants.map((p) => (
-                  <TableRow key={p.participationId}>
-                    <TableCell>{p.collectorName}</TableCell>
-                    <TableCell>{p.members.join(', ')}</TableCell>
-                    <TableCell>{p.shares}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        ))
-      ) : (
-        <p className="text-gray-600">No slots assigned for Day {day}</p>
-      )}
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Time Slot</TableHead>
+            <TableHead>Cow Quality</TableHead>
+            <TableHead>Country</TableHead>
+            <TableHead>Collector Name</TableHead>
+            <TableHead>Participant Names</TableHead>
+            <TableHead>Shares</TableHead>
+            {isAdmin && <TableHead>Actions</TableHead>}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {filteredSlots.length > 0 ? (
+            filteredSlots.map((slot) => (
+              <TableRow key={slot._id}>
+                <TableCell>{slot.timeSlot}</TableCell>
+                <TableCell>{slot.cowQuality}</TableCell>
+                <TableCell>{slot.country}</TableCell>
+                <TableCell>
+                  {slot.participants.map(p => p.collectorName).join(', ')}
+                </TableCell>
+                <TableCell>
+                  {slot.participants.map(p => 
+                    p.participantNames && p.participantNames.length > 0 
+                      ? p.participantNames.join(', ') 
+                      : 'N/A'
+                  ).join('; ')}
+                </TableCell>
+                <TableCell>
+                  {slot.participants.reduce((sum, p) => sum + p.shares, 0)}
+                </TableCell>
+                {isAdmin && (
+                  <TableCell>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => confirmDeleteSlot(slot._id)}
+                    >
+                      Delete
+                    </Button>
+                  </TableCell>
+                )}
+              </TableRow>
+            ))
+          ) : (
+            <TableRow>
+              <TableCell colSpan={isAdmin ? 7 : 6} className="text-center py-8">
+                No slots assigned for Day {day}
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
     </div>
   );
 }

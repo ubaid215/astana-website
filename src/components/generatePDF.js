@@ -4,7 +4,7 @@ export async function generateUserReportPDF(participations) {
   try {
     // Create a new PDFDocument
     const pdfDoc = await PDFDocument.create();
-    
+
     // Set up fonts with error handling
     let font, boldFont;
     try {
@@ -17,11 +17,12 @@ export async function generateUserReportPDF(participations) {
     // Constants
     const pageSize = { width: 595, height: 842 }; // A4 size in points
     const margin = 40;
-    const lineHeight = 18;
-    const fontSize = { header: 16, tableHeader: 11, text: 9 };
-    const minColWidth = 80; // Minimum column width
-    const maxColWidth = 150; // Maximum column width
-    const colSpacing = 10; // Space between columns
+    const lineHeight = 15; // Reduced line height for better spacing
+    const fontSize = { header: 16, tableHeader: 10, text: 8 }; // Reduced font sizes
+    const minColWidth = 60; // Reduced minimum column width
+    const maxColWidth = 120; // Reduced maximum column width
+    const colSpacing = 8; // Reduced space between columns
+    const contentWidth = pageSize.width - (2 * margin);
 
     // Initialize page
     let page = pdfDoc.addPage([pageSize.width, pageSize.height]);
@@ -43,9 +44,33 @@ export async function generateUserReportPDF(participations) {
       return page;
     };
 
-    // Helper function to wrap text
+    // Helper function to wrap text - improved for better handling
     const wrapText = (text, maxWidth, font, size) => {
-      const words = text.toString().split(' ');
+      if (!text) return ['-'];
+
+      const textStr = text.toString();
+      // Handle case with no spaces
+      if (!textStr.includes(' ') && font.widthOfTextAtSize(textStr, size) > maxWidth) {
+        const chars = textStr.split('');
+        let lines = [];
+        let currentLine = '';
+
+        for (const char of chars) {
+          const testLine = currentLine + char;
+          const width = font.widthOfTextAtSize(testLine, size);
+          if (width <= maxWidth) {
+            currentLine = testLine;
+          } else {
+            lines.push(currentLine);
+            currentLine = char;
+          }
+        }
+        if (currentLine) lines.push(currentLine);
+        return lines;
+      }
+
+      // Normal space-based wrapping
+      const words = textStr.split(' ');
       let lines = [];
       let currentLine = '';
 
@@ -63,37 +88,69 @@ export async function generateUserReportPDF(participations) {
       return lines;
     };
 
-    // Calculate dynamic column widths based on content
-    const headers = ['Collector Name', 'WhatsApp No.', 'Country', 'participants', 'Total Amount'];
+    // Define headers and normalize field names
+    const headers = ['Collector Name', 'WhatsApp No.', 'Country', 'Cow Quality', 'Participants', 'Total Amount'];
+    const fields = ['collectorName', 'whatsappNumber', 'country', 'cowQuality', 'members', 'totalAmount'];
+
+    // Normalize data for easier processing
+    const normalizedData = participations.map(p => ({
+      collectorName: p.collectorName || '-',
+      whatsappNumber: p.whatsappNumber || p.whatsappNo || '-',
+      country: p.country || '-',
+      cowQuality: p.cowQuality || '-',
+      members: p.members ? (Array.isArray(p.members) ? p.members.join(', ') : p.members) : '-',
+      totalAmount: p.totalAmount ? p.totalAmount.toLocaleString() : '0'
+    }));
+
+    // Calculate optimal column widths based on content
     const colWidths = headers.map(() => minColWidth);
-    
-    // Measure content width for each column
-    participations.forEach((participation) => {
-      const row = [
-        participation.collectorName || '-',
-        participation.whatsappNo || '-',
-        participation.country || '-',
-        participation.members?.join(', ') || '-',
-        participation.totalAmount?.toLocaleString() || '0',
-      ];
-      row.forEach((cell, i) => {
-        const textWidth = font.widthOfTextAtSize(cell, fontSize.text);
-        const headerWidth = font.widthOfTextAtSize(headers[i], fontSize.tableHeader);
-        colWidths[i] = Math.min(
-          maxColWidth,
-          Math.max(colWidths[i], textWidth, headerWidth)
-        );
-      });
+
+    // First pass: measure all content
+    [...headers, ...normalizedData.flatMap(row =>
+      fields.map(field => row[field])
+    )].forEach((text, i) => {
+      const colIndex = i % headers.length;
+      const textWidth = font.widthOfTextAtSize(text || '-',
+        i < headers.length ? fontSize.tableHeader : fontSize.text);
+      colWidths[colIndex] = Math.max(colWidths[colIndex], textWidth + 8); // +8 for padding
     });
 
-    // Adjust column widths to fit within page
-    const totalContentWidth = colWidths.reduce((sum, w) => sum + w, 0) + (colWidths.length - 1) * colSpacing;
-    let scaleFactor = 1;
-    if (totalContentWidth > pageSize.width - 2 * margin) {
-      scaleFactor = (pageSize.width - 2 * margin) / totalContentWidth;
+    // Cap column widths at maximum
+    colWidths.forEach((width, i) => {
+      colWidths[i] = Math.min(maxColWidth, width);
+    });
+
+    // Calculate total width and adjust proportionally if needed
+    let totalWidth = colWidths.reduce((sum, width) => sum + width, 0) + (colWidths.length - 1) * colSpacing;
+
+    if (totalWidth > contentWidth) {
+      const scale = contentWidth / totalWidth;
       colWidths.forEach((_, i) => {
-        colWidths[i] = Math.max(minColWidth, colWidths[i] * scaleFactor);
+        // Scale down but maintain minimum width
+        colWidths[i] = Math.max(minColWidth, Math.floor(colWidths[i] * scale));
       });
+
+      // Recalculate total width after scaling
+      totalWidth = colWidths.reduce((sum, width) => sum + width, 0) + (colWidths.length - 1) * colSpacing;
+
+      // If still exceeding, reduce the largest columns further
+      if (totalWidth > contentWidth) {
+        const excess = totalWidth - contentWidth;
+        const sortedIndices = colWidths
+          .map((width, index) => ({ width, index }))
+          .sort((a, b) => b.width - a.width);
+
+        // Distribute excess reduction across largest columns
+        let remainingExcess = excess;
+        let i = 0;
+        while (remainingExcess > 0 && i < sortedIndices.length) {
+          const idx = sortedIndices[i].index;
+          const reduction = Math.min(remainingExcess, colWidths[idx] - minColWidth);
+          colWidths[idx] -= reduction;
+          remainingExcess -= reduction;
+          i++;
+        }
+      }
     }
 
     // Calculate column positions
@@ -125,21 +182,24 @@ export async function generateUserReportPDF(participations) {
     // Function to draw headers (used for first page and new pages)
     const drawHeaders = () => {
       headers.forEach((header, i) => {
-        // Draw border rectangle first
+        // Draw border rectangle
         page.drawRectangle({
-          x: colPositions[i] - colSpacing / 2,
-          y: y - 2,
-          width: colWidths[i] + colSpacing,
-          height: lineHeight,
+          x: colPositions[i] - 2,
+          y: y - lineHeight + 2,
+          width: colWidths[i] + 4,
+          height: lineHeight + 2,
           borderWidth: 1,
           borderColor: rgb(0.2, 0.2, 0.2),
           color: rgb(0.95, 0.95, 0.95), // Light gray background
         });
 
-        // Draw header text after rectangle to ensure it appears on top
+        // Center header text in cell
+        const textWidth = font.widthOfTextAtSize(header, fontSize.tableHeader);
+        const centerX = colPositions[i] + (colWidths[i] - textWidth) / 2;
+
         page.drawText(header, {
-          x: colPositions[i] + 4, // Increased padding for better centering
-          y: y + 3, // Adjusted to vertically center text in box
+          x: centerX,
+          y: y - lineHeight + 10, // Position for vertical centering
           size: fontSize.tableHeader,
           font: boldFont,
           color: rgb(0, 0, 0),
@@ -149,63 +209,126 @@ export async function generateUserReportPDF(participations) {
 
     // Draw table headers with borders
     drawHeaders();
-    y -= lineHeight;
+    y -= lineHeight + 15;
 
-    // Add header line
-    page.drawLine({
-      start: { x: margin, y: y + 5 },
-      end: { x: pageSize.width - margin, y: y + 5 },
-      thickness: 1,
-      color: rgb(0.2, 0.2, 0.2),
-    });
-    y -= 10;
-
-    // Add table rows with grid
-    for (const participation of participations) {
-      const row = [
-        participation.collectorName || '-',
-        participation.whatsappNumber || '-',
-        participation.country || '-',
-        participation.members?.join(', ') || '-',
-        participation.totalAmount?.toLocaleString() || '0',
-      ];
-
-      // Calculate required height for this row
-      let maxLines = 1;
-      row.forEach((cell, i) => {
-        const lines = wrapText(cell, colWidths[i], font, fontSize.text);
-        maxLines = Math.max(maxLines, lines.length);
+    // Draw grid borders (vertical)
+    const drawVerticalGridLines = (startY, endY) => {
+      // First vertical line
+      page.drawLine({
+        start: { x: margin - 2, y: startY },
+        end: { x: margin - 2, y: endY },
+        thickness: 1,
+        color: rgb(0.5, 0.5, 0.5),
       });
 
+      // Column dividers
+      colPositions.forEach((x, i) => {
+        if (i > 0) { // Skip the first one as it's already drawn
+          page.drawLine({
+            start: { x: x - colSpacing / 2, y: startY },
+            end: { x: x - colSpacing / 2, y: endY },
+            thickness: 0.5,
+            color: rgb(0.7, 0.7, 0.7),
+          });
+        }
+      });
+
+      // Last vertical line
+      page.drawLine({
+        start: { x: colPositions[colPositions.length - 1] + colWidths[colWidths.length - 1] + 2, y: startY },
+        end: { x: colPositions[colPositions.length - 1] + colWidths[colWidths.length - 1] + 2, y: endY },
+        thickness: 1,
+        color: rgb(0.5, 0.5, 0.5),
+      });
+    };
+
+    // Initial table line
+    const tableTop = y + lineHeight;
+    page.drawLine({
+      start: { x: margin - 2, y: tableTop },
+      end: { x: colPositions[colPositions.length - 1] + colWidths[colWidths.length - 1] + 2, y: tableTop },
+      thickness: 1,
+      color: rgb(0.5, 0.5, 0.5),
+    });
+
+    // Track table bottom for final horizontal line
+    let tableBottom = y;
+
+    // Add table rows
+    for (const row of normalizedData) {
+      // Get all text wrapped for each cell
+      const wrappedCells = fields.map((field, i) =>
+        wrapText(row[field], colWidths[i], font, fontSize.text)
+      );
+
+      // Calculate row height based on maximum lines in any cell
+      const maxLines = Math.max(...wrappedCells.map(lines => lines.length));
+      const rowHeight = maxLines * lineHeight;
+
       // Check if we need a new page
-      if (y - (maxLines * lineHeight) < margin + 20) {
-        // Draw grid lines for previous rows
+      if (y - rowHeight < margin + 20) {
+        // Complete the current page table
+        tableBottom = y;
+        drawVerticalGridLines(tableTop, tableBottom);
+
+        // Bottom border
         page.drawLine({
-          start: { x: margin, y: y + 10 },
-          end: { x: pageSize.width - margin, y: y + 10 },
-          thickness: 0.5,
-          color: rgb(0.7, 0.7, 0.7),
+          start: { x: margin - 2, y: tableBottom },
+          end: { x: colPositions[colPositions.length - 1] + colWidths[colWidths.length - 1] + 2, y: tableBottom },
+          thickness: 1,
+          color: rgb(0.5, 0.5, 0.5),
         });
+
+        // Add page number
+        page.drawText(`Page ${pageNumber}`, {
+          x: pageSize.width - margin - 30,
+          y: margin - 15,
+          size: fontSize.text,
+          font,
+          color: rgb(0.5, 0.5, 0.5),
+        });
+
+        // Add new page
         addNewPage();
+
+        // Table title for continuation
+        page.drawText('Qurbani Participations List (continued)', {
+          x: margin,
+          y,
+          size: fontSize.header,
+          font: boldFont,
+          color: rgb(0, 0, 0),
+        });
+        y -= 30;
+
         // Redraw headers on new page
         drawHeaders();
-        y -= lineHeight;
+        y -= lineHeight + 5;
+        tableTop = y + lineHeight;
+
+        // Top border for new page
         page.drawLine({
-          start: { x: margin, y: y + 5 },
-          end: { x: pageSize.width - margin, y: y + 5 },
+          start: { x: margin - 2, y: tableTop },
+          end: { x: colPositions[colPositions.length - 1] + colWidths[colWidths.length - 1] + 2, y: tableTop },
           thickness: 1,
-          color: rgb(0.2, 0.2, 0.2),
+          color: rgb(0.5, 0.5, 0.5),
         });
-        y -= 10;
       }
 
-      // Draw row
-      row.forEach((cell, i) => {
-        const lines = wrapText(cell, colWidths[i], font, fontSize.text);
+      // Draw row horizontal separator
+      page.drawLine({
+        start: { x: margin - 2, y: y },
+        end: { x: colPositions[colPositions.length - 1] + colWidths[colWidths.length - 1] + 2, y: y },
+        thickness: 0.5,
+        color: rgb(0.7, 0.7, 0.7),
+      });
+
+      // Draw cell content
+      wrappedCells.forEach((lines, colIndex) => {
         lines.forEach((line, lineIndex) => {
           page.drawText(line, {
-            x: colPositions[i],
-            y: y - (lineIndex * lineHeight),
+            x: colPositions[colIndex] + 2, // Add padding
+            y: y - (lineIndex * lineHeight) - 10, // Position based on line index
             size: fontSize.text,
             font,
             color: rgb(0, 0, 0),
@@ -213,33 +336,20 @@ export async function generateUserReportPDF(participations) {
         });
       });
 
-      // Draw vertical grid lines
-      colPositions.forEach((x, i) => {
-        page.drawLine({
-          start: { x: x - colSpacing / 2, y: y + 10 },
-          end: { x: x - colSpacing / 2, y: y - (maxLines * lineHeight) },
-          thickness: 0.5,
-          color: rgb(0.7, 0.7, 0.7),
-        });
-      });
-
-      // Draw horizontal line to separate rows
-      page.drawLine({
-        start: { x: margin, y: y - (maxLines * lineHeight) + 10 },
-        end: { x: pageSize.width - margin, y: y - (maxLines * lineHeight) + 10 },
-        thickness: 0.5,
-        color: rgb(0.7, 0.7, 0.7),
-      });
-
-      y -= maxLines * lineHeight;
+      // Move down by row height
+      y -= rowHeight;
+      tableBottom = y;
     }
 
-    // Draw final horizontal grid line
+    // Draw final table grid
+    drawVerticalGridLines(tableTop, tableBottom);
+
+    // Draw final horizontal line
     page.drawLine({
-      start: { x: margin, y: y + 10 },
-      end: { x: pageSize.width - margin, y: y + 10 },
-      thickness: 0.5,
-      color: rgb(0.7, 0.7, 0.7),
+      start: { x: margin - 2, y: tableBottom },
+      end: { x: colPositions[colPositions.length - 1] + colWidths[colWidths.length - 1] + 2, y: tableBottom },
+      thickness: 1,
+      color: rgb(0.5, 0.5, 0.5),
     });
 
     // Draw final page number
@@ -250,6 +360,41 @@ export async function generateUserReportPDF(participations) {
       font,
       color: rgb(0.5, 0.5, 0.5),
     });
+
+    // Add summary at the end if space permits
+    if (y > margin + 60) {
+      y -= 30;
+      // Count total participants by splitting members field
+      const totalParticipants = normalizedData.reduce((sum, row) => {
+        const members = row.members && row.members !== '-' ? row.members.split(', ').length : 0;
+        return sum + members;
+      }, 0);
+      page.drawText(`Total Participants: ${totalParticipants}`, {
+        x: margin,
+        y,
+        size: fontSize.tableHeader,
+        font: boldFont,
+        color: rgb(0, 0, 0),
+      });
+
+      // Calculate total amount if possible
+      try {
+        const totalAmount = normalizedData
+          .reduce((sum, row) => sum + parseFloat(row.totalAmount.replace(/,/g, '')), 0)
+          .toLocaleString();
+
+        y -= 20;
+        page.drawText(`Total Amount: Pkr ${totalAmount}`, {
+          x: margin,
+          y,
+          size: fontSize.tableHeader,
+          font: boldFont,
+          color: rgb(0, 0, 0),
+        });
+      } catch (error) {
+        // Skip if we can't calculate the total amount
+      }
+    }
 
     // Save the PDF
     const pdfBytes = await pdfDoc.save();

@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select';
-import { TIME_SLOTS } from '@/lib/utils';
+import { TIME_SLOTS, generateRandomTimeSlot } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { useSocket } from '@/hooks/useSocket';
 
@@ -26,6 +26,9 @@ export default function ParticipationForm() {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isTermsAccepted, setIsTermsAccepted] = useState(false);
+  const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
+  const [termsLanguage, setTermsLanguage] = useState('Urdu');
 
   // Fetch prices on initial load if not already in state
   useEffect(() => {
@@ -95,6 +98,14 @@ export default function ParticipationForm() {
     }));
   };
 
+  const handleTimeSlotChange = (value) => {
+    const timeSlot = value === '' ? generateRandomTimeSlot() : value;
+    setFormData((prev) => ({
+      ...prev,
+      timeSlot
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!session) {
@@ -105,13 +116,23 @@ export default function ParticipationForm() {
       setError('Please fill all member names');
       return;
     }
+    if (!isTermsAccepted) {
+      setError('Please accept the terms and conditions');
+      return;
+    }
+
+    let submissionData = { ...formData };
+    if (!submissionData.timeSlot) {
+      submissionData.timeSlot = generateRandomTimeSlot();
+    }
+
     setLoading(true);
     try {
       const res = await fetch('/api/participation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...formData,
+          ...submissionData,
           userId: session.user.id,
         }),
       });
@@ -128,6 +149,38 @@ export default function ParticipationForm() {
       setLoading(false);
     }
   };
+
+  const urduTerms = `
+وکالت نامہ
+میں شکیل احمد ولد محمد عبدالغفور کو بیرون ملک یعنی پاکستان میں اپنی قربانی اور قربانی سے متعلق کسی بھی طرح کا خرچ ( مثلا سلائر باؤس یا قصاب اور مسلمانوں تک اپنی قربانی کا گوشت بحفاظت پہنچانے کے لئے کرائے وغیرہ کے اخراجات کرنے اور قربانی کے جانور کے گوشت چربی وغیرہ جس کے کھانے کا معمول ہے چھوڑی نہیں جاتی، اس میں سے میرے حصے کے مطابق گوشت وغیرہ مسلمانوں میں سے جسے چاہے جیسے چاہے تقسیم کرنے، ایسی چربی و ہڈی جونہ کھائی جاتی اور نہ پکائی جاتی ہے، اسے اگر بیچنے کی ضرورت پڑےبیچ کر حاصل ہونے والی رقم قربانی کے جانور کی کھال اور قربانی میں سے بچی ہوئی رقم خانقاہ عالیہ کو دینے کا وکیل مطلق یعنی ایسا با اختیار نائب بناتا ہوں کہ مذکورہ تمام کام وہ خود سر انجام دیں یا کسی اور کو اسی طرح کا با اختیار کر کے سونپ دیں ۔ اگر میرے حصے والی قربانی کا جانور کسی حادثے یا مرض وغیرہ کے سبب قربانی کے قابل نہ رہا یا کسی وجہ سے مر گیا یا خریداری کے لئے جاتے ہوئے منڈی میں رقم چھن جانیکی صورت میں جانور خریدا ہی نہ جا سکا تو مجھے زندہ یا مردہ جانور کی اطلاع دی جائے اور آئندہ کے معاملات میری اجازت سے طے کئے جائیں، آپ کے ہاتھ میں میری رقم امانت ہے ، اگر بلا کسی غلط استعمال کے آپ سے رقم یا جانور ضائع ہو گیا تو اس کا تاوان آپ کے ذمہ نہ ہو گا اور میں مطالبہ نہ کروں گا۔  
+اگر کسی حصہ دار کا قربانی سے قبل خدانخواستہ انتقال ہو جائے تو اس کے انتقال کی اطلاع خانقاہ عالیہ کو ضرور دی جائے تاکہ آگے کے معاملات دار الافتاء  سے رہنمائی لیکر طے کئے جاسکیں۔ 
+نوٹ : قربانی کے جانوروں کے ذبح کی خدمات شرعی تقاضوں کے مطابق ذبح کے معاملات مجلس کی نگرانی میں ہونگے ۔ 
+وکالت نامے کے حوالے سے اگر کوئی وضاحت درکار ہو تو لکھ کر واٹس ایپ کر دیں ۔ مجلس شرعی رہنمائی لینے کے بعد آپ کو اس کا جواب دے گی۔ 
+نوٹ: اجتماعی قربانی کیلئے بکنگ کرنے کی آخری تاریخ 03 جون 2025 ہے یاد رہے ! اس تاریخ کے بعد کوئی بھی بکنگ نہیں کی جائے گی
+ان شاء اللہ کریم
+`;
+
+  const englishTerms = `
+**Authorization Letter**
+
+I appoint Shakeel Ahmad, son of Muhammad Abdul Ghafoor, as my absolute representative (authorized agent) to perform or delegate the following tasks related to my Qurbani in Pakistan or abroad:
+- Handle all expenses related to the Qurbani, such as slaughtering fees, transportation costs to safely deliver the meat to Muslims, and other associated costs.
+- Distribute the meat, fat, and other edible portions of the Qurbani animal, according to my share, to any Muslims of his choice in any manner he deems appropriate.
+- For inedible fat and bones that are neither consumed nor cooked, sell them if necessary, and donate the proceeds, along with the animal’s hide and any remaining Qurbani funds, to Khanqah Aalia.
+- He may perform these tasks himself or appoint another authorized agent with the same authority.
+
+In case the Qurbani animal allocated to my share becomes unfit for sacrifice due to an accident, illness, or other reasons, or if it dies, or if the funds are lost (e.g., stolen in the market) and the animal cannot be purchased, I should be informed about the status of the animal (alive or dead). Future actions will be decided with my consent. The funds entrusted to you are held in trust, and if they are lost without any misuse on your part, you will not be liable for compensation, and I will not make any claims.
+
+If a shareholder passes away before the Qurbani, Khanqah Aalia must be informed of their demise so that further actions can be determined with guidance from Dar-ul-Ifta.
+
+**Note**: The slaughtering services for Qurbani animals will be conducted under the supervision of the council, in accordance with Shariah requirements.
+
+For any clarification regarding this authorization letter, please send a written query via WhatsApp. The council will respond after seeking Shariah guidance.
+
+**Note**: The last date for booking collective Qurbani is June 3, 2025. Please note that no bookings will be accepted after this date.
+
+*Insha’Allah Kareem*
+`;
 
   return (
     <div className="max-w-5xl mx-auto p-6">
@@ -191,12 +244,13 @@ export default function ParticipationForm() {
               <label htmlFor="timeSlot" className="block text-sm font-medium">Time Slot (Optional)</label>
               <Select
                 value={formData.timeSlot}
-                onValueChange={(value) => setFormData({ ...formData, timeSlot: value })}
+                onValueChange={handleTimeSlotChange}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select time slot" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="">Random Time Slot</SelectItem>
                   {TIME_SLOTS.map((slot) => (
                     <SelectItem key={slot} value={slot}>{slot}</SelectItem>
                   ))}
@@ -243,10 +297,10 @@ export default function ParticipationForm() {
             </div>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-4 mt-4">
             {formData.members.map((member, index) => (
               <div key={index}>
-                <label htmlFor={`member-${index}`} className="block text-sm font-medium">Name Of Qurbani Recipient: {index + 1} </label>
+                <label htmlFor={`member-${index}`} className="block text-sm font-medium">Name Of Qurbani Recipient: {index + 1}</label>
                 <Input
                   id={`member-${index}`}
                   value={member}
@@ -257,7 +311,31 @@ export default function ParticipationForm() {
             ))}
           </div>
 
-          <Button type="submit" className="w-full bg-primary text-white mt-4" disabled={loading || !prices}>
+          <div className="mt-4 flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="terms"
+              checked={isTermsAccepted}
+              onChange={(e) => setIsTermsAccepted(e.target.checked)}
+              className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+            />
+            <label htmlFor="terms" className="text-sm font-medium">
+              I agree to the{' '}
+              <button
+                type="button"
+                onClick={() => setIsTermsModalOpen(true)}
+                className="text-primary underline hover:text-primary-dark"
+              >
+                Terms and Conditions
+              </button>
+            </label>
+          </div>
+
+          <Button
+            type="submit"
+            className={`w-full bg-primary text-white mt-4 ${!isTermsAccepted || loading || !prices ? 'opacity-50 cursor-not-allowed' : ''}`}
+            disabled={loading || !prices || !isTermsAccepted}
+          >
             {loading ? 'Submitting...' : 'Submit'}
           </Button>
         </form>
@@ -266,16 +344,14 @@ export default function ParticipationForm() {
           <h3 className="text-xl font-bold text-primary mb-4">Payment Account Details</h3>
           <div className="space-y-4">
             <div>
-              <h4 className="text-lg font-semibold flex items-center">
-                Meezan Bank
-              </h4>
+              <h4 className="text-lg font-semibold flex items-center">Meezan Bank</h4>
               <p className="text-sm font-medium">IBAN Number:</p>
               <p className="text-sm">PK40MEZN0004170110884115</p>
             </div>
             <div>
               <h4 className="text-lg font-semibold text-primary">Western Union</h4>
-              <p className="text-sm font-medium "><strong>Payment send by Name or Western Union </strong></p>
-              <p>Reciever Name </p>
+              <p className="text-sm font-medium"><strong>Payment send by Name or Western Union</strong></p>
+              <p>Receiver Name</p>
               <p className="text-sm"><b>Name:</b> Muhammad Ubaidullah</p>
               <p className="text-sm font-medium"><b>ID Card Number:</b></p>
               <p className="text-sm">35501-0568066-3</p>
@@ -284,6 +360,38 @@ export default function ParticipationForm() {
           </div>
         </div>
       </div>
+
+      {/* Terms and Conditions Modal */}
+      {isTermsModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded  rounded-xl shadow-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+            <h3 className="text-2xl font-bold text-primary mb-4">Terms and Conditions</h3>
+            <div className="mb-4 flex space-x-2">
+              <button
+                onClick={() => setTermsLanguage('Urdu')}
+                className={`px-4 py-2 rounded ${termsLanguage === 'Urdu' ? 'bg-primary text-white' : 'bg-gray-200'}`}
+              >
+                Urdu
+              </button>
+              <button
+                onClick={() => setTermsLanguage('English')}
+                className={`px-4 py-2 rounded ${termsLanguage === 'English' ? 'bg-primary text-white' : 'bg-gray-200'}`}
+              >
+                English
+              </button>
+            </div>
+            <div className="text-sm text-gray-700 mb-6 whitespace-pre-wrap">
+              {termsLanguage === 'Urdu' ? urduTerms : englishTerms}
+            </div>
+            <Button
+              onClick={() => setIsTermsModalOpen(false)}
+              className="w-full bg-primary text-white"
+            >
+              Close
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

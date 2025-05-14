@@ -36,14 +36,14 @@ export default function ProfilePage() {
         const data = await res.json();
         if (res.ok) {
           const participationsData = Array.isArray(data) ? data : data.participations || [];
-          console.log('✅ Fetched participations:', participationsData);
+          console.log('[ProfilePage] Fetched participations:', participationsData);
           setParticipations(participationsData);
         } else {
-          console.error('❌ API error:', data.error);
+          console.error('[ProfilePage] API error:', data.error);
           setError(data.error || 'Failed to load profile');
         }
       } catch (err) {
-        console.error('❌ Fetch error:', err);
+        console.error('[ProfilePage] Fetch error:', err);
         setError('Server error');
       } finally {
         setLoading(false);
@@ -69,7 +69,7 @@ export default function ProfilePage() {
       formData.append('screenshot', paymentForm.screenshot);
     }
 
-    console.log('✅ Sending FormData:', {
+    console.log('[ProfilePage] Sending FormData:', {
       participationId: paymentForm.participationId,
       transactionId: paymentForm.transactionId,
       screenshot: paymentForm.screenshot ? paymentForm.screenshot.name : null,
@@ -83,14 +83,14 @@ export default function ProfilePage() {
       const data = await res.json();
       if (res.ok) {
         setFormError('');
-        setFormSuccess(`Payment submitted successfully for Participation ID: ${paymentForm.participationId}`);
+        setFormSuccess(`Payment submitted successfully for Participation ID: ${paymentForm.participationId}. Awaiting admin confirmation.`);
         setPaymentForm({ participationId: '', transactionId: '', screenshot: null });
       } else {
-        console.error('❌ Payment submission error:', data.error);
+        console.error('[ProfilePage] Payment submission error:', data.error);
         setFormError(data.error || 'Failed to submit payment');
       }
     } catch (err) {
-      console.error('❌ Fetch error:', err);
+      console.error('[ProfilePage] Fetch error:', err);
       setFormError('Server error');
     }
   };
@@ -126,6 +126,7 @@ export default function ProfilePage() {
                   <TableHead>Time Slot</TableHead>
                   <TableHead>Shares</TableHead>
                   <TableHead>Total Amount</TableHead>
+                  <TableHead>Payment Status</TableHead>
                   <TableHead>Slot Status</TableHead>
                 </TableRow>
               </TableHeader>
@@ -152,15 +153,16 @@ export default function ProfilePage() {
                       </TableCell>
                       <TableCell>{p.cowQuality}</TableCell>
                       <TableCell>Day {p.day}</TableCell>
-                      <TableCell>{p.slotId?.timeSlot || 'Not Assigned'}</TableCell>
+                      <TableCell>{p.timeSlot || 'Not Assigned'}</TableCell>
                       <TableCell>{p.shares}</TableCell>
                       <TableCell>{p.totalAmount.toLocaleString()}</TableCell>
+                      <TableCell>{p.paymentStatus}</TableCell>
                       <TableCell>{p.slotAssigned ? 'Assigned' : 'Not Assigned'}</TableCell>
                     </TableRow>
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center">
+                    <TableCell colSpan={10} className="text-center">
                       No participations yet
                     </TableCell>
                   </TableRow>
@@ -199,7 +201,7 @@ export default function ProfilePage() {
                         </SelectItem>
                       ))
                     ) : (
-                       <SelectItem value="" disabled>
+                      <SelectItem value="" disabled>
                         No participations available
                       </SelectItem>
                     )}
@@ -289,7 +291,7 @@ export default function ProfilePage() {
                   Meezan Bank
                 </h4>
                 <p className="text-sm font-medium">IBAN Number:</p>
-                <p className="text-sm">PK40MEZN0004170110884115</p>
+                <p className="text-sm">PK40MEZN0004170113764115</p>
               </div>
               <div>
                 <h4 className="text-lg font-semibold text-primary">Western Union</h4>
