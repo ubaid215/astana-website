@@ -63,7 +63,7 @@ export default function ParticipationForm() {
         });
         if (!res.ok) throw new Error('Failed to fetch available slots');
         const data = await res.json();
-        setAvailableSlots(data.availableSlots || TIME_SLOTS);
+        setAvailableSlots(data.availableSlots || TIME_SLOTS[formData.day] || TIME_SLOTS[1]);
         console.log('[ParticipationForm] Fetched available slots:', data);
         // Reset timeSlot if it's no longer available
         if (formData.timeSlot && !data.availableSlots.includes(formData.timeSlot)) {
@@ -72,7 +72,7 @@ export default function ParticipationForm() {
         }
       } catch (err) {
         console.error('[ParticipationForm] Failed to fetch available slots:', err);
-        setAvailableSlots(TIME_SLOTS);
+        setAvailableSlots(TIME_SLOTS[formData.day] || TIME_SLOTS[1]);
       }
     };
 
@@ -149,7 +149,7 @@ export default function ParticipationForm() {
             });
             if (!res.ok) throw new Error('Failed to fetch available slots');
             const data = await res.json();
-            setAvailableSlots(data.availableSlots || TIME_SLOTS);
+            setAvailableSlots(data.availableSlots || TIME_SLOTS[formData.day] || TIME_SLOTS[1]);
           } catch (err) {
             console.error('[ParticipationForm] Failed to refresh slots:', err);
           }
@@ -208,8 +208,7 @@ export default function ParticipationForm() {
       ...prev,
       timeSlot: value,
     }));
-    setError(''); // Clear any previous errors
-    // Reset shares to 1 if switching to 03:00 PM - 04:00 PM to enforce the limit
+    setError('');
     if (value === '03:00 PM - 04:00 PM' && formData.shares > 7) {
       setFormData((prev) => ({
         ...prev,
@@ -273,78 +272,119 @@ Ludlow وکالت نامے کے حوالے سے اگر کوئی وضاحت در�
 `;
 
   const englishTerms = `
-**Authorization Letter**
+**Power of Attorney for Qurbani (Sacrifice)**
 
-I appoint Shakeel Ahmad, son of Muhammad Abdul Ghafoor, as my absolute representative (authorized agent) to perform or delegate the following tasks related to my Qurbani in Pakistan or abroad:
-- Handle all expenses related to the Qurbani, such as slaughtering fees, transportation costs to safely deliver the meat to Muslims, and other associated costs.
-- Distribute the meat, fat, and other edible portions of the Qurbani animal, according to my share, to any Muslims of his choice in any manner he deems appropriate.
-- For inedible fat and bones that are neither consumed nor cooked, sell them if necessary, and donate the proceeds, along with the animal’s hide and any remaining Qurbani funds, to Khanqah Aalia.
-- He may perform these tasks himself or appoint another authorized agent with the same authority.
+I, Shakeel Ahmad, son of Muhammad Abdul Ghafur, hereby appoint my trusted representative in Pakistan to carry out all matters related to my Qurbani (sacrifice) on my behalf. This includes managing all necessary arrangements and associated expenses, such as slaughterhouse services, butcher fees, and the secure transportation of meat to eligible recipients in the community, in accordance with Islamic principles.
 
-In case the Qurbani animal allocated to my share becomes unfit for sacrifice due to an accident, illness, or other reasons, or if it dies, or if the funds are lost (e.g., stolen in the market) and the animal cannot be purchased, I should be informed about the status of the animal (alive or dead). Future actions will be decided with my consent. The funds entrusted to you are held in trust, and if they are lost without any misuse on your part, you will not be liable for compensation, and I will not make any claims.
+My representative is authorized to manage all parts of the sacrificial animal, including the meat and fat, which are traditionally consumed and should not be discarded. They may distribute my share of the meat to any deserving individuals or fellow believers, as they see fit and in line with the spirit of Qurbani.
 
-If a shareholder passes away before the Qurbani, Khanqah Aalia must be informed of their demise so that further actions can be determined with guidance from Dar-ul-Ifta.
+Parts of the animal that are not typically consumed or cooked, such as certain fats or bones, should be disposed of respectfully, following appropriate practices. If any such items, including skin or other by-products, are sold, the proceeds and any surplus funds are to be handed over to the Khanqah for appropriate use.
 
-**Note**: The slaughtering services for Qurbani animals will be conducted under the supervision of the council, in accordance with Shariah requirements.
+I fully authorize my representative to take all necessary steps related to this matter, including the right to delegate authority if needed. In the event that the animal intended for my share becomes unfit for sacrifice due to illness, injury, or death, or if it is not acquired due to unforeseen circumstances such as the loss of funds, I request to be informed immediately. Any further arrangements will be made with my consent.
 
-For any clarification regarding this authorization letter, please send a written query via WhatsApp. The council will respond after seeking Shariah guidance.
+The money I have entrusted to you is given as an Amanah (trust). Therefore, if any loss or damage occurs without negligence or misuse, you will not be held liable, and I will not seek any compensation.
 
-**Note**: The last date for booking collective Qurbani is June 3, 2025. Please note that no bookings will be accepted after this date.
+If any stakeholder passes away before the sacrifice is performed, this must be promptly reported to the Khanqah, so that the matter can be addressed appropriately by the Fatwa Council.
 
-*Insha’Allah Kareem*
+**Important Notes:**
+- The slaughter of the sacrificial animal will be conducted strictly in accordance with Shari’ah under the supervision of the Shari’ah Council.
+- For any questions or clarifications regarding this Power of Attorney, please reach out via WhatsApp. A response will be provided after consultation with the relevant authorities.
+- The final date for booking communal Qurbani is June 3, 2025. No further bookings will be accepted after this date.
 `;
 
   return (
-    <div className="max-w-5xl mx-auto p-6">
-      <div className="flex flex-col lg:flex-row lg:space-x-6 space-y-6 lg:space-y-0">
-        <form onSubmit={handleSubmit} className="flex-1 bg-white rounded-xl shadow-md p-6">
-          <h2 className="text-3xl font-bold text-primary text-center">Participation Form</h2>
-          {error && <p className="text-red-600 text-center">{error}</p>}
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div className="grid lg:grid-cols-3 gap-8">
+        {/* Form Section */}
+        <form
+          onSubmit={handleSubmit}
+          className="lg:col-span-2 bg-white rounded-2xl shadow-lg p-8 border border-gray-100"
+        >
+          <h2 className="text-3xl font-bold text-gray-800 text-center mb-6">
+            Qurbani Participation Form
+          </h2>
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-lg text-center text-sm">
+              {error}
+            </div>
+          )}
 
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="grid md:grid-cols-2 gap-6">
             <div>
-              <label htmlFor="collectorName" className="block text-sm font-medium">Collector Name</label>
+              <label
+                htmlFor="collectorName"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Collector Name
+              </label>
               <Input
                 id="collectorName"
                 value={formData.collectorName}
                 onChange={(e) => setFormData({ ...formData, collectorName: e.target.value })}
                 required
+                className="w-full border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="Enter collector name"
               />
             </div>
             <div>
-              <label htmlFor="whatsappNumber" className="block text-sm font-medium">WhatsApp Number</label>
+              <label
+                htmlFor="whatsappNumber"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                WhatsApp Number
+              </label>
               <Input
                 id="whatsappNumber"
                 value={formData.whatsappNumber}
                 onChange={(e) => setFormData({ ...formData, whatsappNumber: e.target.value })}
                 required
+                className="w-full border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="+1234567890"
               />
             </div>
             <div>
-              <label htmlFor="country" className="block text-sm font-medium">Country</label>
+              <label
+                htmlFor="country"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Country
+              </label>
               <Input
                 id="country"
                 value={formData.country}
                 onChange={(e) => setFormData({ ...formData, country: e.target.value })}
                 required
+                className="w-full border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="Enter country"
               />
             </div>
             <div>
-              <label htmlFor="cowQuality" className="block text-sm font-medium">Cow Quality</label>
+              <label
+                htmlFor="cowQuality"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Cow Quality
+              </label>
               <Select
                 value={formData.cowQuality}
                 onValueChange={(value) => setFormData({ ...formData, cowQuality: value })}
                 required
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
                   <SelectValue placeholder="Select quality" />
                 </SelectTrigger>
                 <SelectContent>
                   {prices ? (
                     <>
-                      <SelectItem value="Standard">Standard ({prices.standard.toLocaleString()}/share)</SelectItem>
-                      <SelectItem value="Medium">Medium ({prices.medium.toLocaleString()}/share)</SelectItem>
-                      <SelectItem value="Premium">Premium ({prices.premium.toLocaleString()}/share)</SelectItem>
+                      <SelectItem value="Standard">
+                        Standard ({prices.standard.toLocaleString()}/share)
+                      </SelectItem>
+                      <SelectItem value="Medium">
+                        Medium ({prices.medium.toLocaleString()}/share)
+                      </SelectItem>
+                      <SelectItem value="Premium">
+                        Premium ({prices.premium.toLocaleString()}/share)
+                      </SelectItem>
                     </>
                   ) : (
                     <SelectItem value="loading">Loading prices...</SelectItem>
@@ -353,32 +393,20 @@ For any clarification regarding this authorization letter, please send a written
               </Select>
             </div>
             <div>
-              <label htmlFor="timeSlot" className="block text-sm font-medium">Time Slot (Optional)</label>
-              <Select
-                value={formData.timeSlot}
-                onValueChange={handleTimeSlotChange}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select time slot" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">Assign Automatically</SelectItem>
-                  {availableSlots.map((slot) => (
-                    <SelectItem key={slot} value={slot}>{slot}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label htmlFor="day" className="block text-sm font-medium">Day</label>
+              <label
+                htmlFor="day"
+                className="block text-sm font-medium text-gray-700 mb RV1">
+              
+                Day
+              </label>
               <Select
                 value={formData.day?.toString()}
                 onValueChange={(value) =>
-                  setFormData({ ...formData, day: parseInt(value) })
+                  setFormData({ ...formData, day: parseInt(value), timeSlot: '' })
                 }
                 required
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
                   <SelectValue placeholder="Select day" />
                 </SelectTrigger>
                 <SelectContent>
@@ -388,7 +416,36 @@ For any clarification regarding this authorization letter, please send a written
               </Select>
             </div>
             <div>
-              <label htmlFor="shares" className="block text-sm font-medium">Number of Shares</label>
+              <label
+                htmlFor="timeSlot"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Time Slot (Optional)
+              </label>
+              <Select
+                value={formData.timeSlot}
+                onValueChange={handleTimeSlotChange}
+              >
+                <SelectTrigger className="w-full border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                  <SelectValue placeholder="Select time slot" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Assign Automatically</SelectItem>
+                  {availableSlots.map((slot) => (
+                    <SelectItem key={slot} value={slot}>
+                      {slot}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label
+                htmlFor="shares"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Number of Shares
+              </label>
               <Input
                 id="shares"
                 type="number"
@@ -396,46 +453,65 @@ For any clarification regarding this authorization letter, please send a written
                 value={formData.shares}
                 onChange={(e) => handleSharesChange(e.target.value)}
                 required
+                className="w-full border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="1"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium">Total Amount</label>
+              <label
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Total Amount
+              </label>
               <Input
                 value={formData.totalAmount.toLocaleString()}
                 disabled
-                className="bg-gray-100"
+                className="w-full bg-gray-100 border-gray-300 rounded-lg"
               />
             </div>
           </div>
 
-          <div className="space-y-4 mt-4">
+          <div className="mt-8 space-y-4">
+            <h3 className="text-lg font-semibold text-gray-800">
+              Qurbani participants
+            </h3>
             {formData.members.map((member, index) => (
               <div key={index}>
-                <label htmlFor={`member-${index}`} className="block text-sm font-medium">Name Of Qurbani Recipient: {index + 1}</label>
+                <label
+                  htmlFor={`member-${index}`}
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Participants Name {index + 1}
+                </label>
                 <Input
                   id={`member-${index}`}
                   value={member}
                   onChange={(e) => handleMemberChange(index, e.target.value)}
                   required
+                  className="w-full border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder={`Enter recipient ${index + 1} name`}
                 />
               </div>
             ))}
           </div>
 
-          <div className="mt-4 flex items-center space-x-2">
+          <div className="mt-6 flex items-center space-x-3">
             <input
               type="checkbox"
               id="terms"
               checked={isTermsAccepted}
               onChange={(e) => setIsTermsAccepted(e.target.checked)}
-              className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+              className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
             />
-            <label htmlFor="terms" className="text-sm font-medium">
+            <label
+              htmlFor="terms"
+              className="text-sm font-medium text-gray-700"
+            >
               I agree to the{' '}
               <button
                 type="button"
                 onClick={() => setIsTermsModalOpen(true)}
-                className="text-primary underline hover:text-primary-dark"
+                className="text-indigo-600 hover:text-indigo-800 font-medium underline"
               >
                 Terms and Conditions
               </button>
@@ -444,64 +520,136 @@ For any clarification regarding this authorization letter, please send a written
 
           <Button
             type="submit"
-            className={`w-full bg-primary text-white mt-4 ${!isTermsAccepted || loading || !prices ? 'opacity-50 cursor-not-allowed' : ''}`}
+            className={`w-full mt-8 bg-indigo-600 text-white rounded-lg py-3 text-sm font-medium hover:bg-indigo-700 transition-colors ${
+              !isTermsAccepted || loading || !prices
+                ? 'opacity-50 cursor-not-allowed'
+                : ''
+            }`}
             disabled={loading || !prices || !isTermsAccepted}
           >
-            {loading ? 'Submitting...' : 'Submit'}
+            {loading ? 'Submitting...' : 'Submit Participation'}
           </Button>
         </form>
 
-        <div className="lg:w-80 bg-white rounded-xl shadow-md p-6">
-          <h3 className="text-xl font-bold text-primary mb-4">Payment Account Details</h3>
-          <div className="space-y-4">
+        {/* Payment Details Section */}
+        <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-100">
+          <h3 className="text-xl font-bold text-gray-800 mb-6">
+            Payment Account Details
+          </h3>
+          <div className="space-y-6">
             <div>
-              <h4 className="text-lg font-semibold flex items-center">Meezan Bank</h4>
-              <p className="text-sm font-medium">IBAN Number:</p>
-              <p className="text-sm">PK40MEZN0004170110884115</p>
+              <h4 className="text-lg font-semibold text-gray-800 mb-2">
+                Meezan Bank
+              </h4>
+              <p className="text-sm font-medium text-gray-600">IBAN Number:</p>
+              <p className="text-sm text-gray-800">
+                PK40MEZN0004170110884115
+              </p>
             </div>
             <div>
-              <h4 className="text-lg font-semibold text-primary">Western Union</h4>
-              <p className="text-sm font-medium"><strong>Payment send by Name or Western Union</strong></p>
-              <p>Receiver Name</p>
-              <p className="text-sm"><b>Name:</b> Muhammad Ubaidullah</p>
-              <p className="text-sm font-medium"><b>ID Card Number:</b></p>
-              <p className="text-sm">35501-0568066-3</p>
-              <p className="text-sm font-medium"><b>Phone:</b> +92321-7677062</p>
+              <h4 className="text-lg font-semibold text-gray-800 mb-2">
+                Western Union
+              </h4>
+              <p className="text-sm font-medium text-gray-600">
+                Receiver Details:
+              </p>
+              <p className="text-sm text-gray-800">
+                <span className="font-medium">Name:</span> Muhammad Ubaidullah
+              </p>
+              <p className="text-sm text-gray-800">
+                <span className="font-medium">ID Card Number:</span> 35501-0568066-3
+              </p>
+              <p className="text-sm text-gray-800">
+                <span className="font-medium">Phone:</span> +92321-7677062
+              </p>
             </div>
           </div>
         </div>
       </div>
 
+      {/* Terms and Conditions Modal */}
       {isTermsModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
-            <h3 className="text-2xl font-bold text-primary mb-4">Terms and Conditions</h3>
-            <div className="mb-4 flex space-x-2">
-              <button
-                onClick={() => setTermsLanguage('Urdu')}
-                className={`px-4 py-2 rounded ${termsLanguage === 'Urdu' ? 'bg-primary text-white' : 'bg-gray-200'}`}
-              >
-                Urdu
-              </button>
-              <button
-                onClick={() => setTermsLanguage('English')}
-                className={`px-4 py-2 rounded ${termsLanguage === 'English' ? 'bg-primary text-white' : 'bg-gray-200'}`}
-              >
-                English
-              </button>
-            </div>
-            <div className="text-sm text-gray-700 mb-6 whitespace-pre-wrap">
-              {termsLanguage === 'Urdu' ? urduTerms : englishTerms}
-            </div>
-            <Button
-              onClick={() => setIsTermsModalOpen(false)}
-              className="w-full bg-primary text-white"
-            >
-              Close
-            </Button>
-          </div>
+  <div className="fixed inset-0 bg-gradient-to-b from-black/70 to-gray-900/70 flex items-center justify-center z-50 p-4 sm:p-6 transition-opacity duration-300">
+    <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col transform transition-all duration-300 scale-95 animate-modal-open">
+      {/* Modal Header */}
+      <div className="p-8 pb-0">
+        <h3 className="text-3xl font-bold text-teal-800 font-serif tracking-tight">
+          Terms and Conditions
+        </h3>
+      </div>
+
+      {/* Modal Content */}
+      <div className="flex-1 px-8 py-6 overflow-y-auto scrollbar-thin scrollbar-thumb-teal-200 scrollbar-track-gray-50">
+        {/* Language Tabs */}
+        <div className="flex space-x-3 mb-8">
+          <button
+            onClick={() => setTermsLanguage('Urdu')}
+            className={`flex-1 py-3 px-6 rounded-full text-base font-medium transition-all duration-200 shadow-sm ${
+              termsLanguage === 'Urdu'
+                ? 'bg-teal-600 text-white shadow-md'
+                : 'bg-gray-100 text-teal-800 hover:bg-teal-50 hover:text-teal-900'
+            }`}
+          >
+            Urdu
+          </button>
+          <button
+            onClick={() => setTermsLanguage('English')}
+            className={`flex-1 py-3 px-6 rounded-full text-base font-medium transition-all duration-200 shadow-sm ${
+              termsLanguage === 'English'
+                ? 'bg-teal-600 text-white shadow-md'
+                : 'bg-gray-100 text-teal-800 hover:bg-teal-50 hover:text-teal-900'
+            }`}
+          >
+            English
+          </button>
         </div>
-      )}
+
+        {/* Terms Content */}
+        <div className={`${termsLanguage === 'Urdu' ? 'font-arabic' : 'font-sans'} text-gray-700 leading-relaxed text-base`}>
+          {termsLanguage === 'Urdu' ? (
+            <div className="space-y-6">
+              <h4 className="text-xl font-semibold text-teal-700 font-arabic">وکالت نامہ</h4>
+              <p className="whitespace-pre-wrap text-gray-600">{urduTerms}</p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <h4 className="text-xl font-semibold text-teal-700">
+                Power of Attorney for Qurbani (Sacrifice)
+              </h4>
+              {englishTerms.split('\n\n').map((paragraph, index) => (
+                <div key={index} className="space-y-2">
+                  {paragraph.startsWith('**') ? (
+                    <span className="block font-semibold text-gray-800">
+                      {paragraph.replace(/\*\*/g, '')}
+                    </span>
+                  ) : paragraph.startsWith('-') ? (
+                    <ul className="list-disc pl-6 text-gray-600">
+                      {paragraph.split('\n').map((item, i) => (
+                        <li key={i} className="mb-2">{item.replace(/^- /, '')}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-gray-600">{paragraph}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Modal Footer */}
+      <div className="p-8 border-t border-teal-100 bg-teal-50/50 rounded-b-3xl">
+        <Button
+          onClick={() => setIsTermsModalOpen(false)}
+          className="w-full bg-teal-600 text-white rounded-full py-3.5 text-base font-medium hover:bg-teal-700 transition-all duration-200 shadow-lg hover:shadow-xl"
+        >
+          Close
+        </Button>
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 }

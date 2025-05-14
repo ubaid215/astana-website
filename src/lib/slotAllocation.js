@@ -37,7 +37,7 @@ export async function allocateSlot(participation) {
     let availableSlotCount = 0;
     let availableSlots = [];
     
-    for (const timeSlot of TIME_SLOTS) {
+    for (const timeSlot of TIME_SLOTS[day]) {
       const existingSlot = await Slot.findOne({ timeSlot, day, country });
       if (!existingSlot) {
         totalAvailableCapacity += 7; // New slot can hold 7 shares
@@ -168,10 +168,10 @@ export async function allocateSlot(participation) {
     const participantsToAllocate = remainingParticipants.slice(0, sharesToAllocate);
     let allocated = false;
 
-    // If a preferred time slot is provided, try to partially fill it first
-    if (preferredTimeSlot && TIME_SLOTS.includes(preferredTimeSlot) && slots.length === 0) {
+    // Try to allocate to the preferred time slot first, if provided and not yet used
+    if (preferredTimeSlot && TIME_SLOTS[day].includes(preferredTimeSlot)) {
       const availability = await isTimeSlotAvailable(preferredTimeSlot, cowQuality, sharesToAllocate);
-      if (availability.capacity > 0) {
+      if (availability.available) {
         // Allocate as many shares as possible to the preferred slot
         sharesToAllocate = Math.min(sharesToAllocate, availability.capacity);
         const participantsForPreferred = remainingParticipants.slice(0, sharesToAllocate);
@@ -181,10 +181,20 @@ export async function allocateSlot(participation) {
           remainingShares -= sharesToAllocate;
           remainingParticipants = remainingParticipants.slice(sharesToAllocate);
           allocated = true;
-          preferredTimeSlot = null; // Clear preferred slot after first use
+          // Only clear preferredTimeSlot if all shares are allocated
+          if (remainingShares === 0) {
+            preferredTimeSlot = null;
+          }
+        } else {
+          console.log('[allocateSlot] Failed to assign to preferred slot', { preferredTimeSlot });
         }
       } else {
-        throw new Error(`Selected time slot ${preferredTimeSlot} is unavailable due to cow quality conflict or full capacity. Please choose another.`);
+        console.log('[allocateSlot] Preferred time slot unavailable', {
+          preferredTimeSlot,
+          reason: 'Cow quality conflict or full capacity',
+        });
+        // Clear preferredTimeSlot to try other slots
+        preferredTimeSlot = null;
       }
     }
 
@@ -223,7 +233,7 @@ export async function allocateSlot(participation) {
       sharesToAllocate = Math.min(remainingShares, 7);
       const participantsToAllocate = remainingParticipants.slice(0, sharesToAllocate);
 
-      for (const timeSlot of TIME_SLOTS) {
+      for (const timeSlot of TIME_SLOTS[day]) {
         const availability = await isTimeSlotAvailable(timeSlot, cowQuality, sharesToAllocate);
         if (availability.available) {
           const slot = await assignToSlot(timeSlot, sharesToAllocate, participantsToAllocate);
