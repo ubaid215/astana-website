@@ -1,5 +1,3 @@
-export const dynamic = 'force-dynamic';
-
 import connectDB from '@/lib/db/mongodb';
 import Price from '@/lib/db/models/Price';
 import { getIO } from '@/lib/socket';
@@ -11,21 +9,38 @@ export async function GET(req) {
     await connectDB();
     let price = await Price.findOne();
     if (!price) {
-      price = await Price.create({ standard: 25000, medium: 30000, premium: 35000 });
+      price = await Price.create({
+        standard: { price: 25000, message: '' },
+        medium: { price: 30000, message: '' },
+        premium: { price: 35000, message: '' }
+      });
     }
-    return NextResponse.json(price, { status: 200 });
+
+    // Transform the data to match expected structure
+    const responseData = {
+      standard: {
+        price: price.standard?.price || price.standard || 25000,
+        message: price.standard?.message || ''
+      },
+      medium: {
+        price: price.medium?.price || price.medium || 30000,
+        message: price.medium?.message || ''
+      },
+      premium: {
+        price: price.premium?.price || price.premium || 35000,
+        message: price.premium?.message || ''
+      }
+    };
+
+    return NextResponse.json(responseData, { status: 200 });
   } catch (error) {
-    console.error('Get prices error:', {
-      message: error.message,
-      stack: error.stack,
-    });
+    console.error('Get prices error:', error);
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }
 
 export async function POST(req) {
   try {
-    // Verify admin access
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token || !token.isAdmin) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -34,12 +49,12 @@ export async function POST(req) {
     await connectDB();
     const data = await req.json();
     if (
-      !data.standard ||
-      !data.medium ||
-      !data.premium ||
-      isNaN(data.standard) ||
-      isNaN(data.medium) ||
-      isNaN(data.premium)
+      !data.standard?.price ||
+      !data.medium?.price ||
+      !data.premium?.price ||
+      isNaN(data.standard.price) ||
+      isNaN(data.medium.price) ||
+      isNaN(data.premium.price)
     ) {
       return NextResponse.json({ error: 'Invalid price data' }, { status: 400 });
     }
@@ -48,21 +63,28 @@ export async function POST(req) {
     if (!price) {
       price = new Price(data);
     } else {
-      price.standard = parseInt(data.standard);
-      price.medium = parseInt(data.medium);
-      price.premium = parseInt(data.premium);
+      price.standard = {
+        price: parseInt(data.standard.price),
+        message: data.standard.message || ''
+      };
+      price.medium = {
+        price: parseInt(data.medium.price),
+        message: data.medium.message || ''
+      };
+      price.premium = {
+        price: parseInt(data.premium.price),
+        message: data.premium.message || ''
+      };
       price.updatedAt = new Date();
     }
     await price.save();
 
-    // Get price data to emit
     const priceData = {
       standard: price.standard,
       medium: price.medium,
       premium: price.premium
     };
 
-    // Emit Socket.io event - using pricesUpdated to match client listeners
     const io = getIO();
     if (io) {
       console.log('[API] Broadcasting price update via Socket.IO:', priceData);
@@ -80,3 +102,5 @@ export async function POST(req) {
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }
+
+export const dynamic = 'force-dynamic';

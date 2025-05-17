@@ -15,9 +15,9 @@ export default function PricesPage() {
 
   const form = useForm({
     defaultValues: {
-      standard: 25000,
-      medium: 30000,
-      premium: 35000,
+      standard: { price: 25000, message: '' },
+      medium: { price: 30000, message: '' },
+      premium: { price: 35000, message: '' },
     },
   });
 
@@ -27,7 +27,11 @@ export default function PricesPage() {
         const res = await fetch('/api/admin/prices');
         const data = await res.json();
         if (res.ok) {
-          form.reset(data);
+          form.reset({
+            standard: { price: data.standard.price, message: data.standard.message },
+            medium: { price: data.medium.price, message: data.medium.message },
+            premium: { price: data.premium.price, message: data.premium.message },
+          });
         }
       } catch (err) {
         setError('Failed to fetch prices');
@@ -51,7 +55,6 @@ export default function PricesPage() {
       const result = await res.json();
       
       if (res.ok) {
-        // Emit the updated prices via Socket.IO to all connected clients
         if (connected) {
           emit('pricesUpdated', data);
           console.log('[PricesPage] Emitted price update via Socket.IO:', data);
@@ -73,7 +76,7 @@ export default function PricesPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background p-6 ml-0 ">
+    <div className="min-h-screen bg-background p-6 ml-0">
       <h1 className="text-3xl font-bold text-primary mb-8">Manage Cow Prices</h1>
       
       <div className="max-w-md mx-auto bg-white rounded-lg shadow-md p-6">
@@ -88,47 +91,92 @@ export default function PricesPage() {
             {error && <p className="text-red-600">{error}</p>}
             {message && <p className="text-green-600">{message}</p>}
             
-            <FormField
-              control={form.control}
-              name="standard"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Standard Price (per share)</FormLabel>
-                  <FormControl>
-                    <Input type="number" {...field} onChange={(e) => field.onChange(parseInt(e.target.value))} required />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="medium"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Medium Price (per share)</FormLabel>
-                  <FormControl>
-                    <Input type="number" {...field} onChange={(e) => field.onChange(parseInt(e.target.value))} required />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="premium"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Premium Price (per share)</FormLabel>
-                  <FormControl>
-                    <Input type="number" {...field} onChange={(e) => field.onChange(parseInt(e.target.value))} required />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="space-y-4">
+              <FormField
+                control={form.control}
+                name="standard.price"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Standard Price (per share)</FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} onChange={(e) => field.onChange(parseInt(e.target.value))} required />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="standard.message"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Standard Message</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Enter message for Standard tier" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="space-y-4">
+              <FormField
+                control={form.control}
+                name="medium.price"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Medium Price (per share)</FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} onChange={(e) => field.onChange(parseInt(e.target.value))} required />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="medium.message"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Medium Message</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Enter message for Medium tier" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="space-y-4">
+              <FormField
+                control={form.control}
+                name="premium.price"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Premium Price (per share)</FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} onChange={(e) => field.onChange(parseInt(e.target.value))} required />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="premium.message"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Premium Message</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Enter message for Premium tier" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
             
             <Button type="submit" className="w-full bg-primary text-white" disabled={loading}>
               {loading ? 'Updating...' : 'Update Prices'}
@@ -139,3 +187,5 @@ export default function PricesPage() {
     </div>
   );
 }
+
+export const dynamic = 'force-dynamic';

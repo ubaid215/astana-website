@@ -30,23 +30,90 @@ export default function ParticipationForm() {
   const [isTermsAccepted, setIsTermsAccepted] = useState(false);
   const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
   const [termsLanguage, setTermsLanguage] = useState('Urdu');
+  const [pricesLoading, setPricesLoading] = useState(true);
 
-  // Fetch prices on initial load
+  // Validate prices object
+  const isValidPrices = (prices) => {
+  if (!prices || typeof prices !== 'object') return false;
+
+  // Handle both formats:
+  // 1. New format: { standard: { price: number, message: string }, ... }
+  // 2. Old format: { standard: number, medium: number, premium: number }
+  
+  const validateTier = (tier) => {
+    if (typeof tier === 'number') {
+      return tier > 0;
+    }
+    return (
+      tier &&
+      typeof tier.price === 'number' &&
+      tier.price > 0 &&
+      (typeof tier.message === 'string' || tier.message === undefined)
+    );
+  };
+
+  return (
+    validateTier(prices.standard) &&
+    validateTier(prices.medium) &&
+    validateTier(prices.premium)
+  );
+};
+
+  // Modified useEffect for price fetching
   useEffect(() => {
-    const fetchPrices = async () => {
-      try {
-        const res = await fetch('/api/admin/prices');
-        if (!res.ok) throw new Error('Failed to fetch prices');
-        const data = await res.json();
-        console.log('[ParticipationForm] Fetched initial prices:', data);
-        setPrices(data);
-      } catch (err) {
-        console.error('[ParticipationForm] Failed to fetch prices:', err);
-      }
-    };
+  const normalizePrices = (prices) => {
+    if (!prices) return null;
+    
+    // If prices are in old format (direct numbers), convert to new format
+    if (typeof prices.standard === 'number') {
+      return {
+        standard: { price: prices.standard, message: '' },
+        medium: { price: prices.medium, message: '' },
+        premium: { price: prices.premium, message: '' }
+      };
+    }
+    return prices;
+  };
 
-    if (!prices) fetchPrices();
-  }, [prices, setPrices]);
+  const fetchPrices = async () => {
+    setPricesLoading(true);
+    try {
+      const res = await fetch('/api/admin/prices');
+      if (!res.ok) throw new Error(`Failed to fetch prices: ${res.status}`);
+      
+      const data = await res.json();
+      const normalizedPrices = normalizePrices(data);
+      
+      if (isValidPrices(normalizedPrices)) {
+        setPrices(normalizedPrices);
+        setError('');
+      } else {
+        console.warn('Invalid prices structure:', normalizedPrices);
+        setError('Price data format is invalid');
+        // Set fallback prices
+        setPrices({
+          standard: { price: 25000, message: '' },
+          medium: { price: 30000, message: '' },
+          premium: { price: 35000, message: '' }
+        });
+      }
+    } catch (err) {
+      console.error('Failed to fetch prices:', err);
+      setError('Failed to load prices. Using default prices.');
+      setPrices({
+        standard: { price: 25000, message: '' },
+        medium: { price: 30000, message: '' },
+        premium: { price: 35000, message: '' }
+      });
+    } finally {
+      setPricesLoading(false);
+    }
+  };
+
+  if (!isValidPrices(prices)) {
+    fetchPrices();
+  }
+}, [prices, setPrices]);
 
   // Fetch available slots
   useEffect(() => {
@@ -65,7 +132,6 @@ export default function ParticipationForm() {
         const data = await res.json();
         setAvailableSlots(data.availableSlots || TIME_SLOTS[formData.day] || TIME_SLOTS[1]);
         console.log('[ParticipationForm] Fetched available slots:', data);
-        // Reset timeSlot if it's no longer available
         if (formData.timeSlot && !data.availableSlots.includes(formData.timeSlot)) {
           setFormData((prev) => ({ ...prev, timeSlot: '' }));
           setError('Selected time slot is no longer available. Please choose another.');
@@ -86,7 +152,15 @@ export default function ParticipationForm() {
     if (socket) {
       socket.on('pricesUpdated', (newPrices) => {
         console.log('[ParticipationForm] Prices updated via Socket.IO:', newPrices);
-        setPrices(newPrices);
+        if (isValidPrices(newPrices)) {
+          setPrices(newPrices);
+          setError('');
+        } else {
+          console.warn('[ParticipationForm] Invalid socket prices data:', newPrices);
+          setPrices(null);
+          setError('Invalid price data received from server. Please try again.');
+        }
+        setPricesLoading(false);
       });
 
       socket.on('slotCreated', (newSlot) => {
@@ -108,7 +182,6 @@ export default function ParticipationForm() {
         ) {
           setAvailableSlots((prev) => prev.filter((slot) => slot !== newSlot.timeSlot));
         }
-        // Check if current timeSlot is still valid
         if (formData.timeSlot === newSlot.timeSlot) {
           const fetchAvailableSlots = async () => {
             try {
@@ -169,28 +242,31 @@ export default function ParticipationForm() {
 
   // Update total amount
   useEffect(() => {
-    if (prices && formData.cowQuality && formData.shares) {
+    if (isValidPrices(prices) && formData.cowQuality && formData.shares) {
       const priceKey = formData.cowQuality.toLowerCase();
-      if (prices[priceKey]) {
-        setFormData((prev) => ({
-          ...prev,
-          totalAmount: prices[priceKey] * formData.shares,
-        }));
-      }
+      setFormData((prev) => ({
+        ...prev,
+        totalAmount: prices[priceKey].price * formData.shares,
+      }));
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        totalAmount: 0,
+      }));
     }
   }, [formData.cowQuality, formData.shares, prices]);
 
   const handleSharesChange = (value) => {
     const shares = parseInt(value) || 1;
-    if (formData.timeSlot === '03:00 PM - 04:00 PM' && shares > 7) {
-      setError('For the 03:00 PM - 04:00 PM time slot, a maximum of 7 shares is allowed.');
+    if (formData.timeSlot === '03:30 PM - 04:00 PM' && shares > 7) {
+      setError('For the 03:30 PM - 04:00 PM time slot, a maximum of 7 shares is allowed.');
       return;
     }
     setError('');
     setFormData((prev) => ({
       ...prev,
-      shares: formData.timeSlot === '03:00 PM - 04:00 PM' ? Math.min(shares, 7) : shares,
-      members: Array(formData.timeSlot === '03:00 PM - 04:00 PM' ? Math.min(shares, 7) : shares)
+      shares: formData.timeSlot === '03:30 PM - 04:00 PM' ? Math.min(shares, 7) : shares,
+      members: Array(formData.timeSlot === '03:30 PM - 04:00 PM' ? Math.min(shares, 7) : shares)
         .fill('')
         .map((_, i) => prev.members[i] || ''),
     }));
@@ -209,7 +285,7 @@ export default function ParticipationForm() {
       timeSlot: value,
     }));
     setError('');
-    if (value === '03:00 PM - 04:00 PM' && formData.shares > 7) {
+    if (value === '03:30 PM - 04:00 PM' && formData.shares > 7) {
       setFormData((prev) => ({
         ...prev,
         shares: 7,
@@ -230,6 +306,10 @@ export default function ParticipationForm() {
     }
     if (!isTermsAccepted) {
       setError('Please accept the terms and conditions');
+      return;
+    }
+    if (pricesLoading || !isValidPrices(prices)) {
+      setError('Prices are not loaded. Please wait or refresh the page.');
       return;
     }
 
@@ -295,7 +375,6 @@ If any stakeholder passes away before the sacrifice is performed, this must be p
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <div className="grid lg:grid-cols-3 gap-8">
-        {/* Form Section */}
         <form
           onSubmit={handleSubmit}
           className="lg:col-span-2 bg-white rounded-2xl shadow-lg p-8 border border-gray-100"
@@ -369,25 +448,31 @@ If any stakeholder passes away before the sacrifice is performed, this must be p
                 value={formData.cowQuality}
                 onValueChange={(value) => setFormData({ ...formData, cowQuality: value })}
                 required
+                disabled={pricesLoading}
               >
                 <SelectTrigger className="w-full border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
-                  <SelectValue placeholder="Select quality" />
+                  <SelectValue placeholder={pricesLoading ? "Loading prices..." : "Select quality"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {prices ? (
+                  {isValidPrices(prices) ? (
                     <>
                       <SelectItem value="Standard">
-                        Standard ({prices.standard.toLocaleString()}/share)
+                        Standard ({prices.standard.price.toLocaleString('en-PK', { style: 'currency', currency: 'PKR' })}/share)
+                        {prices.standard.message && ` - ${prices.standard.message}`}
                       </SelectItem>
                       <SelectItem value="Medium">
-                        Medium ({prices.medium.toLocaleString()}/share)
+                        Medium ({prices.medium.price.toLocaleString('en-PK', { style: 'currency', currency: 'PKR' })}/share)
+                        {prices.medium.message && ` - ${prices.medium.message}`}
                       </SelectItem>
                       <SelectItem value="Premium">
-                        Premium ({prices.premium.toLocaleString()}/share)
+                        Premium ({prices.premium.price.toLocaleString('en-PK', { style: 'currency', currency: 'PKR' })}/share)
+                        {prices.premium.message && ` - ${prices.premium.message}`}
                       </SelectItem>
                     </>
                   ) : (
-                    <SelectItem value="loading">Loading prices...</SelectItem>
+                    <SelectItem value="" disabled>
+                      {pricesLoading ? 'Loading prices...' : 'Price information unavailable'}
+                    </SelectItem>
                   )}
                 </SelectContent>
               </Select>
@@ -395,8 +480,8 @@ If any stakeholder passes away before the sacrifice is performed, this must be p
             <div>
               <label
                 htmlFor="day"
-                className="block text-sm font-medium text-gray-700 mb RV1">
-              
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
                 Day
               </label>
               <Select
@@ -429,7 +514,7 @@ If any stakeholder passes away before the sacrifice is performed, this must be p
                 <SelectTrigger className="w-full border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
                   <SelectValue placeholder="Select time slot" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-60 overflow-y-auto">
                   <SelectItem value="">Assign Automatically</SelectItem>
                   {availableSlots.map((slot) => (
                     <SelectItem key={slot} value={slot}>
@@ -464,7 +549,7 @@ If any stakeholder passes away before the sacrifice is performed, this must be p
                 Total Amount
               </label>
               <Input
-                value={formData.totalAmount.toLocaleString()}
+                value={formData.totalAmount.toLocaleString('en-PK', { style: 'currency', currency: 'PKR' })}
                 disabled
                 className="w-full bg-gray-100 border-gray-300 rounded-lg"
               />
@@ -473,7 +558,7 @@ If any stakeholder passes away before the sacrifice is performed, this must be p
 
           <div className="mt-8 space-y-4">
             <h3 className="text-lg font-semibold text-gray-800">
-              Qurbani participants
+              Qurbani Participants
             </h3>
             {formData.members.map((member, index) => (
               <div key={index}>
@@ -481,7 +566,7 @@ If any stakeholder passes away before the sacrifice is performed, this must be p
                   htmlFor={`member-${index}`}
                   className="block text-sm font-medium text-gray-700 mb-1"
                 >
-                  Participants Name {index + 1}
+                  Participant Name {index + 1}
                 </label>
                 <Input
                   id={`member-${index}`}
@@ -489,7 +574,7 @@ If any stakeholder passes away before the sacrifice is performed, this must be p
                   onChange={(e) => handleMemberChange(index, e.target.value)}
                   required
                   className="w-full border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
-                  placeholder={`Enter recipient ${index + 1} name`}
+                  placeholder={`Enter participant ${index + 1} name`}
                 />
               </div>
             ))}
@@ -520,18 +605,16 @@ If any stakeholder passes away before the sacrifice is performed, this must be p
 
           <Button
             type="submit"
-            className={`w-full mt-8 bg-indigo-600 text-white rounded-lg py-3 text-sm font-medium hover:bg-indigo-700 transition-colors ${
-              !isTermsAccepted || loading || !prices
+            className={`w-full mt-8 bg-indigo-600 text-white rounded-lg py-3 text-sm font-medium hover:bg-indigo-700 transition-colors ${!isTermsAccepted || loading || pricesLoading || !isValidPrices(prices)
                 ? 'opacity-50 cursor-not-allowed'
                 : ''
-            }`}
-            disabled={loading || !prices || !isTermsAccepted}
+              }`}
+            disabled={loading || pricesLoading || !isValidPrices(prices) || !isTermsAccepted}
           >
             {loading ? 'Submitting...' : 'Submit Participation'}
           </Button>
         </form>
 
-        {/* Payment Details Section */}
         <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-100">
           <h3 className="text-xl font-bold text-gray-800 mb-6">
             Payment Account Details
@@ -567,89 +650,81 @@ If any stakeholder passes away before the sacrifice is performed, this must be p
         </div>
       </div>
 
-      {/* Terms and Conditions Modal */}
       {isTermsModalOpen && (
-  <div className="fixed inset-0 bg-gradient-to-b from-black/70 to-gray-900/70 flex items-center justify-center z-50 p-4 sm:p-6 transition-opacity duration-300">
-    <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col transform transition-all duration-300 scale-95 animate-modal-open">
-      {/* Modal Header */}
-      <div className="p-8 pb-0">
-        <h3 className="text-3xl font-bold text-teal-800 font-serif tracking-tight">
-          Terms and Conditions
-        </h3>
-      </div>
-
-      {/* Modal Content */}
-      <div className="flex-1 px-8 py-6 overflow-y-auto scrollbar-thin scrollbar-thumb-teal-200 scrollbar-track-gray-50">
-        {/* Language Tabs */}
-        <div className="flex space-x-3 mb-8">
-          <button
-            onClick={() => setTermsLanguage('Urdu')}
-            className={`flex-1 py-3 px-6 rounded-full text-base font-medium transition-all duration-200 shadow-sm ${
-              termsLanguage === 'Urdu'
-                ? 'bg-teal-600 text-white shadow-md'
-                : 'bg-gray-100 text-teal-800 hover:bg-teal-50 hover:text-teal-900'
-            }`}
-          >
-            Urdu
-          </button>
-          <button
-            onClick={() => setTermsLanguage('English')}
-            className={`flex-1 py-3 px-6 rounded-full text-base font-medium transition-all duration-200 shadow-sm ${
-              termsLanguage === 'English'
-                ? 'bg-teal-600 text-white shadow-md'
-                : 'bg-gray-100 text-teal-800 hover:bg-teal-50 hover:text-teal-900'
-            }`}
-          >
-            English
-          </button>
-        </div>
-
-        {/* Terms Content */}
-        <div className={`${termsLanguage === 'Urdu' ? 'font-arabic' : 'font-sans'} text-gray-700 leading-relaxed text-base`}>
-          {termsLanguage === 'Urdu' ? (
-            <div className="space-y-6">
-              <h4 className="text-xl font-semibold text-teal-700 font-arabic">وکالت نامہ</h4>
-              <p className="whitespace-pre-wrap text-gray-600">{urduTerms}</p>
+        <div className="fixed inset-0 bg-gradient-to-b from-black/70 to-gray-900/70 flex items-center justify-center z-50 p-4 sm:p-6 transition-opacity duration-300">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col transform transition-all duration-300 scale-95 animate-modal-open">
+            <div className="p-8 pb-0">
+              <h3 className="text-3xl font-bold text-teal-800 font-serif tracking-tight">
+                Terms and Conditions
+              </h3>
             </div>
-          ) : (
-            <div className="space-y-6">
-              <h4 className="text-xl font-semibold text-teal-700">
-                Power of Attorney for Qurbani (Sacrifice)
-              </h4>
-              {englishTerms.split('\n\n').map((paragraph, index) => (
-                <div key={index} className="space-y-2">
-                  {paragraph.startsWith('**') ? (
-                    <span className="block font-semibold text-gray-800">
-                      {paragraph.replace(/\*\*/g, '')}
-                    </span>
-                  ) : paragraph.startsWith('-') ? (
-                    <ul className="list-disc pl-6 text-gray-600">
-                      {paragraph.split('\n').map((item, i) => (
-                        <li key={i} className="mb-2">{item.replace(/^- /, '')}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-gray-600">{paragraph}</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
 
-      {/* Modal Footer */}
-      <div className="p-8 border-t border-teal-100 bg-teal-50/50 rounded-b-3xl">
-        <Button
-          onClick={() => setIsTermsModalOpen(false)}
-          className="w-full bg-teal-600 text-white rounded-full py-3.5 text-base font-medium hover:bg-teal-700 transition-all duration-200 shadow-lg hover:shadow-xl"
-        >
-          Close
-        </Button>
-      </div>
-    </div>
-  </div>
-)}
+            <div className="flex-1 px-8 py-6 overflow-y-auto scrollbar-thin scrollbar-thumb-teal-200 scrollbar-track-gray-50">
+              <div className="flex space-x-3 mb-8">
+                <button
+                  onClick={() => setTermsLanguage('Urdu')}
+                  className={`flex-1 py-3 px-6 rounded-full text-base font-medium transition-all duration-200 shadow-sm ${termsLanguage === 'Urdu'
+                      ? 'bg-teal-600 text-white shadow-md'
+                      : 'bg-gray-100 text-teal-800 hover:bg-teal-50 hover:text-teal-900'
+                    }`}
+                >
+                  Urdu
+                </button>
+                <button
+                  onClick={() => setTermsLanguage('English')}
+                  className={`flex-1 py-3 px-6 rounded-full text-base font-medium transition-all duration-200 shadow-sm ${termsLanguage === 'English'
+                      ? 'bg-teal-600 text-white shadow-md'
+                      : 'bg-gray-100 text-teal-800 hover:bg-teal-50 hover:text-teal-900'
+                    }`}
+                >
+                  English
+                </button>
+              </div>
+
+              <div className={`${termsLanguage === 'Urdu' ? 'font-arabic' : 'font-sans'} text-gray-700 leading-relaxed text-base`}>
+                {termsLanguage === 'Urdu' ? (
+                  <div className="space-y-6">
+                    <h4 className="text-xl font-semibold text-teal-700 font-arabic">وکالت نامہ</h4>
+                    <p className="whitespace-pre-wrap text-gray-600">{urduTerms}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    <h4 className="text-xl font-semibold text-teal-700">
+                      Power of Attorney for Qurbani (Sacrifice)
+                    </h4>
+                    {englishTerms.split('\n\n').map((paragraph, index) => (
+                      <div key={index} className="space-y-2">
+                        {paragraph.startsWith('**') ? (
+                          <span className="block font-semibold text-gray-800">
+                            {paragraph.replace(/\*\*/g, '')}
+                          </span>
+                        ) : paragraph.startsWith('-') ? (
+                          <ul className="list-disc pl-6 text-gray-600">
+                            {paragraph.split('\n').map((item, i) => (
+                              <li key={i} className="mb-2">{item.replace(/^- /, '')}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-gray-600">{paragraph}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-8 border-t border-teal-100 bg-teal-50/50 rounded-b-3xl">
+              <Button
+                onClick={() => setIsTermsModalOpen(false)}
+                className="w-full bg-teal-600 text-white rounded-full py-3.5 text-base font-medium hover:bg-teal-700 transition-all duration-200 shadow-lg hover:shadow-xl"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,3 @@
-export const dynamic = 'force-dynamic'
-
 import connectDB from '@/lib/db/mongodb';
 import Price from '@/lib/db/models/Price';
 
@@ -8,7 +6,11 @@ export async function GET() {
     await connectDB();
     let price = await Price.findOne();
     if (!price) {
-      price = await Price.create({ standard: 25000, medium: 30000, premium: 35000 });
+      price = await Price.create({
+        standard: { price: 25000, message: '' },
+        medium: { price: 30000, message: '' },
+        premium: { price: 35000, message: '' }
+      });
     }
     return new Response(JSON.stringify(price), { status: 200 });
   } catch (error) {

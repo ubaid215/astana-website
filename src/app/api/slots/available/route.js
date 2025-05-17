@@ -6,7 +6,7 @@ import { NextResponse } from 'next/server';
 export async function POST(req) {
   try {
     await connectDB();
-    const { day, cowQuality } = await req.json();
+    const { day, cowQuality, shares = 1 } = await req.json();
 
     if (!day || !cowQuality) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -15,19 +15,55 @@ export async function POST(req) {
     // Find all slots for the given day
     const slots = await Slot.find({ day });
 
-    // Identify time slots that are available for the selected cow quality
-    const availableSlots = TIME_SLOTS[day].filter((timeSlot) => {
+    // Get detailed availability info
+    const availability = TIME_SLOTS[day].map((timeSlot) => {
       const slot = slots.find((s) => s.timeSlot === timeSlot);
       if (!slot) {
-        // Slot is unoccupied and available
-        return true;
+        return {
+          timeSlot,
+          available: true,
+          capacity: 7,
+          canAccommodate: shares <= 7,
+          cowQuality: null
+        };
       }
-      // Slot is available if it matches the cow quality and has remaining capacity
+      
       const totalShares = slot.participants.reduce((sum, p) => sum + p.shares, 0);
-      return slot.cowQuality === cowQuality && totalShares < 7;
+      const availableCapacity = 7 - totalShares;
+      
+      return {
+        timeSlot,
+        available: slot.cowQuality === cowQuality && availableCapacity > 0,
+        capacity: availableCapacity,
+        canAccommodate: shares <= availableCapacity,
+        cowQuality: slot.cowQuality
+      };
     });
 
-    return NextResponse.json({ availableSlots }, { status: 200 });
+    // Filter available slots that match our cow quality
+    const availableSlots = availability
+      .filter(slot => slot.available)
+      .map(slot => slot.timeSlot);
+
+    // Calculate total available capacity
+    const totalAvailableCapacity = availability
+      .filter(slot => slot.available)
+      .reduce((sum, slot) => sum + slot.capacity, 0);
+
+    // Check if we can accommodate all requested shares
+    const canAccommodate = shares <= totalAvailableCapacity;
+    const needsMultipleSlots = shares > 7;
+    const availableSlotCount = availableSlots.length;
+
+    return NextResponse.json({ 
+      availableSlots,
+      totalAvailableCapacity,
+      canAccommodate,
+      needsMultipleSlots,
+      availableSlotCount,
+      minimumRequiredSlots: Math.ceil(shares / 7),
+      detailedAvailability: availability
+    }, { status: 200 });
   } catch (error) {
     console.error('[Available Slots API] Error:', error);
     return NextResponse.json({ error: 'Server error' }, { status: 500 });

@@ -8,6 +8,30 @@ import Papa from 'papaparse';
 import ExcelJS from 'exceljs';
 import { getToken } from 'next-auth/jwt';
 
+// Helper functions moved to global scope so they can be used by all export formats
+const cleanText = (text) => {
+  return text != null ? text.toString().trim() : '';
+};
+
+// Modified to extract participant names with proper formatting
+const getParticipantNames = (participants, maxParticipants = 7) => {
+  if (!participants || !Array.isArray(participants)) return Array(maxParticipants).fill('');
+  
+  // Flatten all participant names from all participation records
+  const allNames = participants
+    .flatMap(p => p.participantNames || [])
+    .filter(name => name && typeof name === 'string')
+    .map(name => cleanText(name));
+  
+  // Fill to maxParticipants participants (empty strings if fewer than maxParticipants)
+  const filledNames = [...allNames];
+  while (filledNames.length < maxParticipants) {
+    filledNames.push('');
+  }
+  
+  return filledNames.slice(0, maxParticipants);
+};
+
 export async function GET(req) {
   try {
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
@@ -62,29 +86,6 @@ export async function GET(req) {
           y = pageSize.height - margin - 30;
           pageNumber++;
           return page;
-        };
-
-        const cleanText = (text) => {
-          return text != null ? text.toString().trim() : '';
-        };
-
-        // Modified to extract participant names with proper formatting
-        const getParticipantNames = (participants) => {
-          if (!participants || !Array.isArray(participants)) return Array(maxParticipants).fill('');
-          
-          // Flatten all participant names from all participation records
-          const allNames = participants
-            .flatMap(p => p.participantNames || [])
-            .filter(name => name && typeof name === 'string')
-            .map(name => cleanText(name));
-          
-          // Fill to 7 participants (empty strings if fewer than 7)
-          const filledNames = [...allNames];
-          while (filledNames.length < maxParticipants) {
-            filledNames.push('');
-          }
-          
-          return filledNames.slice(0, maxParticipants);
         };
 
         // Add report title
@@ -204,7 +205,7 @@ export async function GET(req) {
             // Get slot data
             const timeSlot = cleanText(slot.timeSlot) || '-';
             const cowQuality = cleanText(slot.cowQuality) || '-';
-            const participants = getParticipantNames(slot.participants);
+            const participants = getParticipantNames(slot.participants, maxParticipants);
 
             // Draw the slot row (spanning multiple lines for participants)
             // Draw cell borders
@@ -318,22 +319,43 @@ export async function GET(req) {
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Slots');
 
+        // Set headers to match the CSV format
         worksheet.columns = [
-          { header: 'Day', key: 'day', width: 10 },
-          { header: 'Time Slot', key: 'timeSlot', width: 15 },
-          { header: 'Cow Quality', key: 'cowQuality', width: 15 },
-          { header: 'Participant Names', key: 'participantNames', width: 30 },
+          { header: 'Day', key: 'day', width: 8 },
+          { header: 'TimeSlot', key: 'timeSlot', width: 25 },
+          { header: 'CowQuality', key: 'cowQuality', width: 15 },
+          { header: 'ParticipantNames', key: 'participantNames', width: 70 },
         ];
 
-        slots.forEach(slot => {
-          worksheet.addRow({
-            day: slot.day != null ? slot.day.toString() : '',
-            timeSlot: slot.timeSlot || '',
-            cowQuality: slot.cowQuality != null ? slot.cowQuality.toString() : '',
-            participantNames: getParticipantNames(slot.participants).join(', '),
-          });
-        });
+        // Group slots by day
+        const slotsByDay = slots.reduce((acc, slot) => {
+          const day = slot.day || 'Unknown';
+          if (!acc[day]) acc[day] = [];
+          acc[day].push(slot);
+          return acc;
+        }, {});
 
+        // Sort days and then slots within each day
+        const sortedDays = Object.keys(slotsByDay).sort((a, b) => Number(a) - Number(b));
+        
+        for (const day of sortedDays) {
+          // Sort slots by time within each day
+          const sortedSlots = slotsByDay[day].sort((a, b) => {
+            return a.timeSlot?.localeCompare(b.timeSlot || '') || 0;
+          });
+          
+          // Add each slot to the worksheet
+          for (const slot of sortedSlots) {
+            worksheet.addRow({
+              day: slot.day != null ? slot.day.toString() : '',
+              timeSlot: slot.timeSlot || '',
+              cowQuality: slot.cowQuality != null ? slot.cowQuality.toString() : '',
+              participantNames: getParticipantNames(slot.participants).join(', '),
+            });
+          }
+        }
+
+        // Format header row
         worksheet.getRow(1).eachCell(cell => {
           cell.font = { bold: true };
           cell.fill = {
@@ -350,6 +372,7 @@ export async function GET(req) {
           cell.alignment = { horizontal: 'center', vertical: 'middle' };
         });
 
+        // Format data rows
         worksheet.eachRow((row, rowNumber) => {
           if (rowNumber > 1) {
             row.eachCell(cell => {
@@ -362,13 +385,20 @@ export async function GET(req) {
               cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
             });
           }
-
-          row.eachCell((cell) => {
-            const value = cell.value ? cell.value.toString() : '';
-            const currentWidth = worksheet.columns[colNumber - 1].width;
-            const textWidth = Math.min(50, Math.max(currentWidth, value.length + 2));
-            worksheet.columns[colNumber - 1].width = Math.max(currentWidth, textWidth);
+        });
+        
+        // Auto-fit column widths based on content
+        worksheet.columns.forEach(column => {
+          let maxLength = 0;
+          column.eachCell({ includeEmpty: true }, cell => {
+            if (cell.value) {
+              const cellTextLength = cell.value.toString().length;
+              maxLength = Math.max(maxLength, cellTextLength);
+            }
           });
+          
+          // Add some padding
+          column.width = Math.min(70, Math.max(column.width || 10, maxLength + 2));
         });
 
         const xlsxBuffer = await workbook.xlsx.writeBuffer();
