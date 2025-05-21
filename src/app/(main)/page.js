@@ -1,5 +1,4 @@
 import Hero from '@/components/layout/Hero';
-import PopupCard from '@/components/PopupCard';
 import { Button } from '@/components/ui/Button';
 import Link from 'next/link';
 import {
@@ -28,8 +27,7 @@ export default function HomePage() {
     <div className="bg-background">
       <Hero />
 
-      {/* Popup Card */}
-      <PopupCard />
+      
 
       {/* New Bento-style Section */}
       <section className="py-16 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
