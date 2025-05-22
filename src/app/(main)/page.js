@@ -37,7 +37,7 @@ export default function HomePage() {
             {/* Main large image */}
             <div className="col-span-2 aspect-video relative rounded-xl overflow-hidden shadow-lg">
               <video
-                src="/videos/qurbani-intro.mp4" // replace with your actual video path
+                src="/videos/qurbani-intro1.mp4" // replace with your actual video path
                 className="w-full h-full object-cover"
                 controls
                 autoPlay
