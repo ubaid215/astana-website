@@ -6,6 +6,7 @@ import { useSocket } from '@/hooks/useSocket';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/use-toast';
 import { useSession } from 'next-auth/react';
+import { Checkbox } from '@/components/ui/Checkbox';
 
 export default function SlotTable({ initialSlots, day }) {
   const { socket, connected, slots, setSlots } = useSocket();
@@ -66,25 +67,50 @@ export default function SlotTable({ initialSlots, day }) {
       }
     };
 
-    const handleConnectError = (error) => {
-      console.warn('[SlotTable] Socket.IO connection error:', error.message);
+    const handleSlotCompleted = ({ slotId, completed, day: slotDay }) => {
+      console.log('[SlotTable] Slot completed event received:', { slotId, completed, slotDay });
+      if (slotDay !== day) {
+        console.log('[SlotTable] Ignoring slotCompleted event for different day:', { slotDay, currentDay: day });
+        return;
+      }
+      setSlots((prevSlots) => {
+        const slotExists = prevSlots.some(slot => slot._id === slotId);
+        if (!slotExists) {
+          console.warn('[SlotTable] Slot not found in state:', slotId);
+          return prevSlots;
+        }
+        const updatedSlots = prevSlots.map((slot) =>
+          slot._id === slotId ? { ...slot, completed } : slot
+        );
+        console.log('[SlotTable] Updated slots:', updatedSlots);
+        return updatedSlots.sort((a, b) => a.timeSlot.localeCompare(b.timeSlot));
+      });
       toast({
-        title: 'Connection Error',
-        description: 'Failed to connect to real-time updates. Please refresh the page.',
-        variant: 'destructive',
+        title: 'Slot Completion Updated',
+        description: `Slot ${slotId} marked as ${completed ? 'completed' : 'incomplete'}`,
+        variant: 'success',
       });
     };
 
     socket.on('slotCreated', handleSlotCreated);
     socket.on('slotDeleted', handleSlotDeleted);
     socket.on('slotUpdated', handleSlotUpdated);
-    socket.on('connect_error', handleConnectError);
+    socket.on('slotCompleted', handleSlotCompleted);
+    socket.on('connect_error', (error) => {
+      console.warn('[SlotTable] Socket.IO connection error:', error.message);
+      toast({
+        title: 'Connection Error',
+        description: 'Failed to connect to real-time updates. Please refresh the page.',
+        variant: 'destructive',
+      });
+    });
 
     return () => {
       socket.off('slotCreated', handleSlotCreated);
       socket.off('slotDeleted', handleSlotDeleted);
       socket.off('slotUpdated', handleSlotUpdated);
-      socket.off('connect_error', handleConnectError);
+      socket.off('slotCompleted', handleSlotCompleted);
+      socket.off('connect_error');
       console.log('[SlotTable] Cleaned up socket event listeners');
     };
   }, [socket, connected, setSlots, toast, day]);
@@ -141,7 +167,7 @@ export default function SlotTable({ initialSlots, day }) {
           throw new Error('Authentication required');
         }
 
-        const targetDay = day === 1 ? 2 : 1; // Toggle between Day 1 and Day 2
+        const targetDay = day === 1 ? 2 : 1;
         const response = await fetch('/api/slots/shuffle', {
           method: 'POST',
           headers: {
@@ -187,6 +213,43 @@ export default function SlotTable({ initialSlots, day }) {
     [handleShuffleParticipant, day]
   );
 
+  const handleCompleteSlot = useCallback(
+    async (slotId, completed) => {
+      try {
+        if (status !== 'authenticated' || !session?.user?.isAdmin) {
+          throw new Error('Admin access required');
+        }
+
+        const response = await fetch('/api/slots/complete', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ slotId, completed }),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || 'Failed to update slot completion');
+        }
+
+        toast({
+          title: 'Success',
+          description: `Slot marked as ${completed ? 'completed' : 'incomplete'}`,
+          variant: 'success',
+        });
+      } catch (error) {
+        console.error('Error updating slot completion:', error.message);
+        toast({
+          title: 'Error',
+          description: `Failed to update slot: ${error.message}`,
+          variant: 'destructive',
+        });
+      }
+    },
+    [toast, session, status]
+  );
+
   const filteredSlots = slots
     .filter((s) => s.day === day)
     .sort((a, b) => a.timeSlot.localeCompare(b.timeSlot));
@@ -202,14 +265,16 @@ export default function SlotTable({ initialSlots, day }) {
             <TableHead>Collector Name</TableHead>
             <TableHead>Participant Names</TableHead>
             <TableHead>Shares</TableHead>
+            {isAdmin && <TableHead>Complete</TableHead>}
             {isAdmin && <TableHead>Actions</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
           {filteredSlots.length > 0 ? (
-            filteredSlots.map((slot) =>
-              slot.participants.map((participant) => (
-                <TableRow key={`${slot._id}-${participant.participationId}`}>
+            filteredSlots.map((slot) => {
+              console.log('[SlotTable] Rendering slot:', { id: slot._id, completed: slot.completed });
+              return slot.participants.map((participant) => (
+                <TableRow key={`${slot._id}-${participant.participationId}-${slot.completed}`}>
                   <TableCell>{slot.timeSlot}</TableCell>
                   <TableCell>{slot.cowQuality}</TableCell>
                   <TableCell>{participant.collectorName}</TableCell>
@@ -219,6 +284,14 @@ export default function SlotTable({ initialSlots, day }) {
                       : 'N/A'}
                   </TableCell>
                   <TableCell>{participant.shares}</TableCell>
+                  {isAdmin && (
+                    <TableCell>
+                      <Checkbox
+                        checked={slot.completed || false}
+                        onCheckedChange={(checked) => handleCompleteSlot(slot._id, checked)}
+                      />
+                    </TableCell>
+                  )}
                   {isAdmin && (
                     <TableCell className="flex gap-2">
                       <Button
@@ -246,11 +319,11 @@ export default function SlotTable({ initialSlots, day }) {
                     </TableCell>
                   )}
                 </TableRow>
-              ))
-            )
+              ));
+            })
           ) : (
             <TableRow>
-              <TableCell colSpan={isAdmin ? 6 : 5} className="text-center py-8">
+              <TableCell colSpan={isAdmin ? 7 : 5} className="text-center py-8">
                 No slots assigned for Day {day}
               </TableCell>
             </TableRow>

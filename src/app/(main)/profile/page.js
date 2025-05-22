@@ -8,12 +8,14 @@ import { Input } from '@/components/ui/Input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 import { useSocket } from '@/hooks/useSocket';
+import { useToast } from '@/components/ui/use-toast';
 import { FaCopy } from 'react-icons/fa';
 
 export default function ProfilePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const { participations, setParticipations } = useSocket();
+  const { participations, setParticipations, socket, connected } = useSocket();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [paymentForm, setPaymentForm] = useState({
@@ -23,6 +25,7 @@ export default function ProfilePage() {
   });
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
+  const [completionNotification, setCompletionNotification] = useState('');
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -38,6 +41,14 @@ export default function ProfilePage() {
           const participationsData = Array.isArray(data) ? data : data.participations || [];
           console.log('[ProfilePage] Fetched participations:', participationsData);
           setParticipations(participationsData);
+
+          // Check if any participation is linked to a completed slot
+          const hasCompletedSlot = participationsData.some(p => p.slotAssigned && p.completed === true);
+          console.log('[ProfilePage] Checked for completed slots:', { hasCompletedSlot, participationsData });
+          if (hasCompletedSlot) {
+            console.log('[ProfilePage] Found completed slot on fetch');
+            setCompletionNotification('Your Qurbani has been done!');
+          }
         } else {
           console.error('[ProfilePage] API error:', data.error);
           setError(data.error || 'Failed to load profile');
@@ -54,6 +65,44 @@ export default function ProfilePage() {
       fetchProfile();
     }
   }, [status, router, setParticipations]);
+
+  useEffect(() => {
+    if (!socket || !connected) {
+      console.warn('[ProfilePage] Socket not connected, skipping event listeners');
+      return;
+    }
+
+    const handleSlotCompleted = ({ slotId, completed, userId }) => {
+      console.log('[ProfilePage] Slot completed event received:', { slotId, completed, userId });
+      console.log('[ProfilePage] Session user ID:', session?.user?.id);
+      if (session?.user?.id === userId) {
+        console.log('[ProfilePage] User ID matched, completed:', completed);
+        if (completed) {
+          setCompletionNotification('Your Qurbani has been done!');
+          toast({
+            title: 'Qurbani Completed',
+            description: 'Your Qurbani has been successfully completed.',
+            variant: 'success',
+          });
+          // Update participations to reflect completed status
+          setParticipations((prev) =>
+            prev.map((p) =>
+              p.slotId === slotId ? { ...p, completed: true } : p
+            )
+          );
+        }
+      } else {
+        console.log('[ProfilePage] User ID did not match:', { sessionUserId: session?.user?.id, eventUserId: userId });
+      }
+    };
+
+    socket.on('slotCompleted', handleSlotCompleted);
+
+    return () => {
+      socket.off('slotCompleted', handleSlotCompleted);
+      console.log('[ProfilePage] Cleaned up socket event listeners');
+    };
+  }, [socket, connected, session, toast, setParticipations]);
 
   const handlePaymentSubmit = async (e) => {
     e.preventDefault();
@@ -111,6 +160,12 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen bg-background p-6">
       <h1 className="text-3xl font-bold text-primary mb-8">User Profile</h1>
+      {completionNotification && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 max-w-sm shadow-sm">
+          <h3 className="text-lg font-semibold text-green-800">Qurbani Status</h3>
+          <p className="text-green-700">{completionNotification}</p>
+        </div>
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
           <div className="bg-white rounded-lg shadow-md p-6">
@@ -290,8 +345,9 @@ export default function ProfilePage() {
                 <h4 className="text-lg font-semibold text-primary flex items-center">
                   Meezan Bank
                 </h4>
+                <p className="text-sm text-primary">Account Title: Munawar Hussnain</p>
                 <p className="text-sm font-medium">IBAN Number:</p>
-                <p className="text-sm">PK40MEZN0004170113764115</p>
+                <p className="text-sm">PK40MEZN0004170110884115</p>
               </div>
               <div>
                 <h4 className="text-lg font-semibold text-primary">Western Union</h4>
@@ -315,3 +371,5 @@ export default function ProfilePage() {
     </div>
   );
 }
+
+export const dynamic = 'force-dynamic';

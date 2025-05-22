@@ -560,6 +560,8 @@ If any stakeholder passes away before the sacrifice is performed, this must be p
             <h3 className="text-lg font-semibold text-gray-800">
               Qurbani Participants
             </h3>
+            <h5>Add participant name with his/her father name</h5>
+            <h6 className='text-gray-500 opacity-55 text-sm'>(e.g: Muhammad Ali Bin Usman Ali) (e.g: Fatima Bint-e Aslam)</h6>
             {formData.members.map((member, index) => (
               <div key={index}>
                 <label
@@ -624,6 +626,7 @@ If any stakeholder passes away before the sacrifice is performed, this must be p
               <h4 className="text-lg font-semibold text-gray-800 mb-2">
                 Meezan Bank
               </h4>
+                <p className="text-sm text-primary">Account Title: Munawar Hussnain</p>
               <p className="text-sm font-medium text-gray-600">IBAN Number:</p>
               <p className="text-sm text-gray-800">
                 PK40MEZN0004170110884115
