@@ -21,7 +21,7 @@ export default function ParticipationForm() {
     timeSlot: '',
     day: '',
     shares: 1,
-    members: [''],
+    members: [{ name: '', fatherName: '', gender: '' }],
     totalAmount: 0,
   });
   const [availableSlots, setAvailableSlots] = useState([]);
@@ -34,86 +34,75 @@ export default function ParticipationForm() {
 
   // Validate prices object
   const isValidPrices = (prices) => {
-  if (!prices || typeof prices !== 'object') return false;
-
-  // Handle both formats:
-  // 1. New format: { standard: { price: number, message: string }, ... }
-  // 2. Old format: { standard: number, medium: number, premium: number }
-  
-  const validateTier = (tier) => {
-    if (typeof tier === 'number') {
-      return tier > 0;
-    }
+    if (!prices || typeof prices !== 'object') return false;
+    const validateTier = (tier) => {
+      if (typeof tier === 'number') {
+        return tier > 0;
+      }
+      return (
+        tier &&
+        typeof tier.price === 'number' &&
+        tier.price > 0 &&
+        (typeof tier.message === 'string' || tier.message === undefined)
+      );
+    };
     return (
-      tier &&
-      typeof tier.price === 'number' &&
-      tier.price > 0 &&
-      (typeof tier.message === 'string' || tier.message === undefined)
+      validateTier(prices.standard) &&
+      validateTier(prices.medium) &&
+      validateTier(prices.premium)
     );
   };
 
-  return (
-    validateTier(prices.standard) &&
-    validateTier(prices.medium) &&
-    validateTier(prices.premium)
-  );
-};
-
-  // Modified useEffect for price fetching
+  // Fetch prices
   useEffect(() => {
-  const normalizePrices = (prices) => {
-    if (!prices) return null;
-    
-    // If prices are in old format (direct numbers), convert to new format
-    if (typeof prices.standard === 'number') {
-      return {
-        standard: { price: prices.standard, message: '' },
-        medium: { price: prices.medium, message: '' },
-        premium: { price: prices.premium, message: '' }
-      };
-    }
-    return prices;
-  };
+    const normalizePrices = (prices) => {
+      if (!prices) return null;
+      if (typeof prices.standard === 'number') {
+        return {
+          standard: { price: prices.standard, message: '' },
+          medium: { price: prices.medium, message: '' },
+          premium: { price: prices.premium, message: '' },
+        };
+      }
+      return prices;
+    };
 
-  const fetchPrices = async () => {
-    setPricesLoading(true);
-    try {
-      const res = await fetch('/api/admin/prices');
-      if (!res.ok) throw new Error(`Failed to fetch prices: ${res.status}`);
-      
-      const data = await res.json();
-      const normalizedPrices = normalizePrices(data);
-      
-      if (isValidPrices(normalizedPrices)) {
-        setPrices(normalizedPrices);
-        setError('');
-      } else {
-        console.warn('Invalid prices structure:', normalizedPrices);
-        setError('Price data format is invalid');
-        // Set fallback prices
+    const fetchPrices = async () => {
+      setPricesLoading(true);
+      try {
+        const res = await fetch('/api/admin/prices');
+        if (!res.ok) throw new Error(`Failed to fetch prices: ${res.status}`);
+        const data = await res.json();
+        const normalizedPrices = normalizePrices(data);
+        if (isValidPrices(normalizedPrices)) {
+          setPrices(normalizedPrices);
+          setError('');
+        } else {
+          console.warn('Invalid prices structure:', normalizedPrices);
+          setError('Price data format is invalid');
+          setPrices({
+            standard: { price: 25000, message: '' },
+            medium: { price: 30000, message: '' },
+            premium: { price: 35000, message: '' },
+          });
+        }
+      } catch (err) {
+        console.error('Failed to fetch prices:', err);
+        setError('Failed to load prices. Using default prices.');
         setPrices({
           standard: { price: 25000, message: '' },
           medium: { price: 30000, message: '' },
-          premium: { price: 35000, message: '' }
+          premium: { price: 35000, message: '' },
         });
+      } finally {
+        setPricesLoading(false);
       }
-    } catch (err) {
-      console.error('Failed to fetch prices:', err);
-      setError('Failed to load prices. Using default prices.');
-      setPrices({
-        standard: { price: 25000, message: '' },
-        medium: { price: 30000, message: '' },
-        premium: { price: 35000, message: '' }
-      });
-    } finally {
-      setPricesLoading(false);
-    }
-  };
+    };
 
-  if (!isValidPrices(prices)) {
-    fetchPrices();
-  }
-}, [prices, setPrices]);
+    if (!isValidPrices(prices)) {
+      fetchPrices();
+    }
+  }, [prices, setPrices]);
 
   // Fetch available slots
   useEffect(() => {
@@ -147,7 +136,7 @@ export default function ParticipationForm() {
     }
   }, [formData.day, formData.cowQuality, formData.country]);
 
-  // Listen for price and slot updates via Socket.IO
+  // Socket.IO listeners
   useEffect(() => {
     if (socket) {
       socket.on('pricesUpdated', (newPrices) => {
@@ -267,15 +256,17 @@ export default function ParticipationForm() {
       ...prev,
       shares: formData.timeSlot === '03:30 PM - 04:00 PM' ? Math.min(shares, 7) : shares,
       members: Array(formData.timeSlot === '03:30 PM - 04:00 PM' ? Math.min(shares, 7) : shares)
-        .fill('')
-        .map((_, i) => prev.members[i] || ''),
+        .fill()
+        .map((_, i) => prev.members[i] || { name: '', fatherName: '', gender: '' }),
     }));
   };
 
-  const handleMemberChange = (index, value) => {
+  const handleMemberChange = (index, field, value) => {
     setFormData((prev) => ({
       ...prev,
-      members: prev.members.map((m, i) => (i === index ? value : m)),
+      members: prev.members.map((m, i) =>
+        i === index ? { ...m, [field]: value } : m
+      ),
     }));
   };
 
@@ -289,7 +280,9 @@ export default function ParticipationForm() {
       setFormData((prev) => ({
         ...prev,
         shares: 7,
-        members: Array(7).fill('').map((_, i) => prev.members[i] || ''),
+        members: Array(7)
+          .fill()
+          .map((_, i) => prev.members[i] || { name: '', fatherName: '', gender: '' }),
       }));
     }
   };
@@ -300,8 +293,8 @@ export default function ParticipationForm() {
       setError('Please log in to submit the form');
       return;
     }
-    if (formData.members.some((m) => !m)) {
-      setError('Please fill all member names');
+    if (formData.members.some((m) => !m.name || !m.fatherName || !m.gender)) {
+      setError('Please fill all participant names, father names, and gender selections');
       return;
     }
     if (!isTermsAccepted) {
@@ -313,6 +306,12 @@ export default function ParticipationForm() {
       return;
     }
 
+    // Combine name and fatherName into "Name Bin/Bint-e FatherName"
+    const combinedMembers = formData.members.map((member) => {
+      const connector = member.gender === 'Female' ? 'Bint-e' : 'Bin';
+      return `${member.name} ${connector} ${member.fatherName}`;
+    });
+
     setLoading(true);
     try {
       const res = await fetch('/api/participation', {
@@ -321,6 +320,7 @@ export default function ParticipationForm() {
         body: JSON.stringify({
           ...formData,
           userId: session.user.id,
+          members: combinedMembers,
         }),
       });
 
@@ -560,24 +560,65 @@ If any stakeholder passes away before the sacrifice is performed, this must be p
             <h3 className="text-lg font-semibold text-gray-800">
               Qurbani Participants
             </h3>
-            <h5>Add participant name with his/her father name</h5>
-            <h6 className='text-gray-500 opacity-55 text-sm'>(e.g: Muhammad Ali Bin Usman Ali) (e.g: Fatima Bint-e Aslam)</h6>
+            <h5>Add participant name with their father name</h5>
+            <h6 className="text-gray-500 opacity-55 text-sm">
+              (e.g., Muhammad Ali Bin Usman Ali for males, Fatima Bint-e Aslam for females)
+            </h6>
             {formData.members.map((member, index) => (
-              <div key={index}>
-                <label
-                  htmlFor={`member-${index}`}
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  Participant Name {index + 1}
-                </label>
-                <Input
-                  id={`member-${index}`}
-                  value={member}
-                  onChange={(e) => handleMemberChange(index, e.target.value)}
-                  required
-                  className="w-full border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
-                  placeholder={`Enter participant ${index + 1} name`}
-                />
+              <div key={index} className="grid md:grid-cols-3 gap-4">
+                <div>
+                  <label
+                    htmlFor={`member-name-${index}`}
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    Participant Name {index + 1}
+                  </label>
+                  <Input
+                    id={`member-name-${index}`}
+                    value={member.name}
+                    onChange={(e) => handleMemberChange(index, 'name', e.target.value)}
+                    required
+                    className="w-full border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+                    placeholder={`Enter participant ${index + 1} name`}
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor={`member-fatherName-${index}`}
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    Father Name {index + 1}
+                  </label>
+                  <Input
+                    id={`member-fatherName-${index}`}
+                    value={member.fatherName}
+                    onChange={(e) => handleMemberChange(index, 'fatherName', e.target.value)}
+                    required
+                    className="w-full border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+                    placeholder={`Enter father name for participant ${index + 1}`}
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor={`member-gender-${index}`}
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    Gender {index + 1}
+                  </label>
+                  <Select
+                    value={member.gender}
+                    onValueChange={(value) => handleMemberChange(index, 'gender', value)}
+                    required
+                  >
+                    <SelectTrigger className="w-full border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                      <SelectValue placeholder="Select gender" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Male">Male</SelectItem>
+                      <SelectItem value="Female">Female</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             ))}
           </div>
@@ -607,10 +648,11 @@ If any stakeholder passes away before the sacrifice is performed, this must be p
 
           <Button
             type="submit"
-            className={`w-full mt-8 bg-indigo-600 text-white rounded-lg py-3 text-sm font-medium hover:bg-indigo-700 transition-colors ${!isTermsAccepted || loading || pricesLoading || !isValidPrices(prices)
+            className={`w-full mt-8 bg-indigo-600 text-white rounded-lg py-3 text-sm font-medium hover:bg-indigo-700 transition-colors ${
+              !isTermsAccepted || loading || pricesLoading || !isValidPrices(prices)
                 ? 'opacity-50 cursor-not-allowed'
                 : ''
-              }`}
+            }`}
             disabled={loading || pricesLoading || !isValidPrices(prices) || !isTermsAccepted}
           >
             {loading ? 'Submitting...' : 'Submit Participation'}
@@ -626,7 +668,7 @@ If any stakeholder passes away before the sacrifice is performed, this must be p
               <h4 className="text-lg font-semibold text-gray-800 mb-2">
                 Meezan Bank
               </h4>
-                <p className="text-sm text-primary">Account Title: Munawar Hussnain</p>
+              <p className="text-sm text-primary">Account Title: Munawar Hussnain</p>
               <p className="text-sm font-medium text-gray-600">IBAN Number:</p>
               <p className="text-sm text-gray-800">
                 PK40MEZN0004170110884115
@@ -666,19 +708,21 @@ If any stakeholder passes away before the sacrifice is performed, this must be p
               <div className="flex space-x-3 mb-8">
                 <button
                   onClick={() => setTermsLanguage('Urdu')}
-                  className={`flex-1 py-3 px-6 rounded-full text-base font-medium transition-all duration-200 shadow-sm ${termsLanguage === 'Urdu'
+                  className={`flex-1 py-3 px-6 rounded-full text-base font-medium transition-all duration-200 shadow-sm ${
+                    termsLanguage === 'Urdu'
                       ? 'bg-teal-600 text-white shadow-md'
                       : 'bg-gray-100 text-teal-800 hover:bg-teal-50 hover:text-teal-900'
-                    }`}
+                  }`}
                 >
                   Urdu
                 </button>
                 <button
                   onClick={() => setTermsLanguage('English')}
-                  className={`flex-1 py-3 px-6 rounded-full text-base font-medium transition-all duration-200 shadow-sm ${termsLanguage === 'English'
+                  className={`flex-1 py-3 px-6 rounded-full text-base font-medium transition-all duration-200 shadow-sm ${
+                    termsLanguage === 'English'
                       ? 'bg-teal-600 text-white shadow-md'
                       : 'bg-gray-100 text-teal-800 hover:bg-teal-50 hover:text-teal-900'
-                    }`}
+                  }`}
                 >
                   English
                 </button>

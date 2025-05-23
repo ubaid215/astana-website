@@ -235,36 +235,47 @@ export default function UserList({ initialParticipations, currentPage, totalPage
       </div>
       
       <div className="overflow-x-auto">
-        <Table>
+        <Table className="min-w-full">
           <TableHeader>
             <TableRow>
-              <TableHead>User</TableHead>
-              <TableHead>Collector Name</TableHead>
-              <TableHead>Members</TableHead>
-              <TableHead>Cow Quality</TableHead>
-              <TableHead>Day</TableHead>
-              <TableHead>Time Slot</TableHead>
-              <TableHead>Shares</TableHead>
-              <TableHead>Total Amount</TableHead>
-              <TableHead>Payment Status</TableHead>
-              <TableHead>Slot Status</TableHead>
-              <TableHead>Actions</TableHead>
+              <TableHead className="w-40">User</TableHead>
+              <TableHead className="w-40">Collector Name</TableHead>
+              <TableHead className="w-64">Members</TableHead>
+              <TableHead className="w-28">Cow Quality</TableHead>
+              <TableHead className="w-20">Day</TableHead>
+              <TableHead className="w-32">Time Slot</TableHead>
+              <TableHead className="w-20">Shares</TableHead>
+              <TableHead className="w-32">Total Amount</TableHead>
+              <TableHead className="w-28">Payment Status</TableHead>
+              <TableHead className="w-28">Slot Status</TableHead>
+              <TableHead className="w-28">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {localParticipations.length > 0 ? (
               localParticipations.map((p) => (
                 <TableRow key={p._id}>
-                  <TableCell>
+                  <TableCell className="whitespace-normal break-words">
                     {p.userId?.name} ({p.userId?.email})
                   </TableCell>
-                  <TableCell>{p.collectorName}</TableCell>
-                  <TableCell>
-                    {Array.isArray(p.members) && p.members.length > 0 ? p.members.join(', ') : 'N/A'}
+                  <TableCell className="whitespace-normal break-words max-w-xs">
+                    {p.collectorName}
+                  </TableCell>
+                  <TableCell className="whitespace-normal break-words max-w-xs">
+                    {Array.isArray(p.members) && p.members.length > 0
+                      ? p.members.map((name, index) => (
+                          <div key={index} className="flex items-baseline">
+                            <span className="text-xs text-gray-500 mr-2">{index + 1}.</span>
+                            <span>{name}</span>
+                          </div>
+                        ))
+                      : 'N/A'}
                   </TableCell>
                   <TableCell>{p.cowQuality}</TableCell>
                   <TableCell>Day {p.day}</TableCell>
-                  <TableCell>{p.slotId?.timeSlot || 'Not Assigned'}</TableCell>
+                  <TableCell className="whitespace-normal break-words">
+                    {p.slotId?.timeSlot || 'Not Assigned'}
+                  </TableCell>
                   <TableCell>{p.shares}</TableCell>
                   <TableCell>{p.totalAmount?.toLocaleString() || '0'}</TableCell>
                   <TableCell>{p.paymentStatus}</TableCell>

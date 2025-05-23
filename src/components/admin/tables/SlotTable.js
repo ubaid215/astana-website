@@ -257,79 +257,86 @@ export default function SlotTable({ initialSlots, day }) {
   return (
     <div className="bg-white rounded-lg shadow-md p-6 mb-6">
       <h2 className="text-xl font-semibold text-primary mb-4">Day {day} Slots</h2>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Time Slot</TableHead>
-            <TableHead>Cow Quality</TableHead>
-            <TableHead>Collector Name</TableHead>
-            <TableHead>Participant Names</TableHead>
-            <TableHead>Shares</TableHead>
-            {isAdmin && <TableHead>Complete</TableHead>}
-            {isAdmin && <TableHead>Actions</TableHead>}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {filteredSlots.length > 0 ? (
-            filteredSlots.map((slot) => {
-              console.log('[SlotTable] Rendering slot:', { id: slot._id, completed: slot.completed });
-              return slot.participants.map((participant) => (
-                <TableRow key={`${slot._id}-${participant.participationId}-${slot.completed}`}>
-                  <TableCell>{slot.timeSlot}</TableCell>
-                  <TableCell>{slot.cowQuality}</TableCell>
-                  <TableCell>{participant.collectorName}</TableCell>
-                  <TableCell>
-                    {participant.participantNames && participant.participantNames.length > 0
-                      ? participant.participantNames.join(', ')
-                      : 'N/A'}
-                  </TableCell>
-                  <TableCell>{participant.shares}</TableCell>
-                  {isAdmin && (
-                    <TableCell>
-                      <Checkbox
-                        checked={slot.completed || false}
-                        onCheckedChange={(checked) => handleCompleteSlot(slot._id, checked)}
-                      />
-                    </TableCell>
-                  )}
-                  {isAdmin && (
-                    <TableCell className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          confirmShuffleParticipant(
-                            slot._id,
-                            participant.participationId,
-                            participant.collectorName
-                          )
-                        }
-                      >
-                        Shuffle to Day {day === 1 ? 2 : 1}
-                      </Button>
-                      {slot.participants.length === 1 && (
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => confirmDeleteSlot(slot._id)}
-                        >
-                          Delete
-                        </Button>
-                      )}
-                    </TableCell>
-                  )}
-                </TableRow>
-              ));
-            })
-          ) : (
+      <div className="overflow-x-auto">
+        <Table className="min-w-full">
+          <TableHeader>
             <TableRow>
-              <TableCell colSpan={isAdmin ? 7 : 5} className="text-center py-8">
-                No slots assigned for Day {day}
-              </TableCell>
+              <TableHead className="w-32">Time Slot</TableHead>
+              <TableHead className="w-28">Cow Quality</TableHead>
+              <TableHead className="w-40">Collector Name</TableHead>
+              <TableHead className="w-64">Participant Names</TableHead>
+              <TableHead className="w-20">Shares</TableHead>
+              {isAdmin && <TableHead className="w-24">Complete</TableHead>}
+              {isAdmin && <TableHead className="w-64">Actions</TableHead>}
             </TableRow>
-          )}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {filteredSlots.length > 0 ? (
+              filteredSlots.map((slot) => {
+                console.log('[SlotTable] Rendering slot:', { id: slot._id, completed: slot.completed });
+                return slot.participants.map((participant) => (
+                  <TableRow key={`${slot._id}-${participant.participationId}-${slot.completed}`}>
+                    <TableCell>{slot.timeSlot}</TableCell>
+                    <TableCell>{slot.cowQuality}</TableCell>
+                    <TableCell className="whitespace-normal break-words">{participant.collectorName}</TableCell>
+                    <TableCell className="whitespace-normal break-words max-w-xs">
+                      {participant.participantNames && participant.participantNames.length > 0
+                        ? participant.participantNames.map((name, index) => (
+                            <div key={index} className="flex items-baseline">
+                              <span className="text-xs text-gray-500 mr-2">{index + 1}.</span>
+                              <span>{name}</span>
+                            </div>
+                          ))
+                        : 'N/A'}
+                    </TableCell>
+                    <TableCell>{participant.shares}</TableCell>
+                    {isAdmin && (
+                      <TableCell>
+                        <Checkbox
+                          checked={slot.completed || false}
+                          onCheckedChange={(checked) => handleCompleteSlot(slot._id, checked)}
+                        />
+                      </TableCell>
+                    )}
+                    {isAdmin && (
+                      <TableCell className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            confirmShuffleParticipant(
+                              slot._id,
+                              participant.participationId,
+                              participant.collectorName
+                            )
+                          }
+                        >
+                          Shuffle to Day {day === 1 ? 2 : 1}
+                        </Button>
+                        {slot.participants.length === 1 && (
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => confirmDeleteSlot(slot._id)}
+                          >
+                            Delete
+                          </Button>
+                        )}
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ));
+              })
+            ) : (
+              <TableRow>
+                <TableCell colSpan={isAdmin ? 7 : 5} className="text-center py-8">
+                  No slots assigned for Day {day}
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }

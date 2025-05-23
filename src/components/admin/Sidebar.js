@@ -15,7 +15,6 @@ import {
   FaBars,
   FaTimes,
   FaSignOutAlt,
-  FaHistory,
 } from 'react-icons/fa';
 import { MenuIcon } from 'lucide-react';
 
@@ -61,19 +60,19 @@ export default function Layout({ children }) {
   };
 
   return (
-    <div className="flex h-[130vh] overflow-hidden bg-gray-100">
+    <div className="flex min-h-screen bg-gray-100">
       {/* Mobile Menu Button */}
       <button
         className="md:hidden fixed top-4 left-4 z-50 p-2 rounded-md bg-primary text-white"
         onClick={toggleSidebar}
-        aria-label={isOpen ? "Close menu" : "Open menu"}
+        aria-label={isOpen ? 'Close menu' : 'Open menu'}
       >
         {isOpen ? <FaTimes size={24} /> : <FaBars size={24} />}
       </button>
 
       {/* Sidebar */}
       <div
-        className={`fixed md:sticky top-0 left-0 h-full bg-primary text-white transition-all duration-300 ease-in-out z-40 
+        className={`fixed top-0 left-0 h-screen bg-primary text-white transition-all duration-300 ease-in-out z-40 
           ${isOpen ? 'w-64' : 'w-16'} 
           ${isMobile && !isOpen ? '-translate-x-full' : 'translate-x-0'}`}
       >
@@ -87,7 +86,7 @@ export default function Layout({ children }) {
           <button
             className="hidden md:block text-white hover:text-gray-300 transition-colors"
             onClick={toggleSidebar}
-            aria-label={isOpen ? "Collapse sidebar" : "Expand sidebar"}
+            aria-label={isOpen ? 'Collapse sidebar' : 'Expand sidebar'}
           >
             {isOpen ? <MenuIcon size={16} /> : <MenuIcon size={16} />}
           </button>
@@ -134,7 +133,9 @@ export default function Layout({ children }) {
 
       {/* Main Content */}
       <div
-        className="flex-1 overflow-auto bg-gray-50"
+        className={`flex-1 overflow-auto bg-gray-50 transition-all duration-300 ${
+          isOpen && !isMobile ? 'ml-64' : 'ml-16'
+        }`}
       >
         <main className="p-4">
           {children}
