@@ -15,31 +15,24 @@ import {
   FaBars,
   FaTimes,
   FaSignOutAlt,
+  FaChartPie, // Added for Share Limits icon
 } from 'react-icons/fa';
 import { MenuIcon } from 'lucide-react';
 
 export default function Layout({ children }) {
   const pathname = usePathname();
-  // Default to desktop state to match server render
   const [isOpen, setIsOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
 
-  // Update mobile state and sidebar visibility only on client side
   useEffect(() => {
     const checkIsMobile = () => {
       const mobile = window.innerWidth < 768;
       setIsMobile(mobile);
-      // Close sidebar on mobile, open on desktop
       setIsOpen(!mobile);
     };
 
-    // Initial check
     checkIsMobile();
-
-    // Add resize listener
     window.addEventListener('resize', checkIsMobile);
-
-    // Clean up
     return () => window.removeEventListener('resize', checkIsMobile);
   }, []);
 
@@ -48,8 +41,8 @@ export default function Layout({ children }) {
     { name: 'Users', href: '/admin/users', icon: FaUsers },
     { name: 'Slots', href: '/admin/slots', icon: FaTable },
     { name: 'Prices', href: '/admin/prices', icon: FaDollarSign },
+    { name: 'Share Limits', href: '/admin/share-limits', icon: FaChartPie }, // Added Share Limits
     { name: 'Payments', href: '/admin/payments', icon: FaMoneyBill },
-    // { name: 'Payment History', href: '/admin/payments/history', icon: FaHistory },
     { name: 'Settings', href: '/admin/settings', icon: FaCog },
   ];
 
@@ -76,13 +69,10 @@ export default function Layout({ children }) {
           ${isOpen ? 'w-64' : 'w-16'} 
           ${isMobile && !isOpen ? '-translate-x-full' : 'translate-x-0'}`}
       >
-        {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
           <h1 className={`font-bold transition-opacity duration-200 ${isOpen ? 'opacity-100' : 'opacity-0 md:hidden'}`}>
             Admin Panel
           </h1>
-
-          {/* Desktop Toggle Button */}
           <button
             className="hidden md:block text-white hover:text-gray-300 transition-colors"
             onClick={toggleSidebar}
@@ -92,7 +82,6 @@ export default function Layout({ children }) {
           </button>
         </div>
 
-        {/* Navigation */}
         <nav className="mt-4 flex flex-col h-[calc(100%-5rem)]">
           <ul className="space-y-2 px-2 flex-1">
             {navItems.map((item) => (
@@ -114,7 +103,6 @@ export default function Layout({ children }) {
             ))}
           </ul>
 
-          {/* Logout Button */}
           <div className="mt-auto px-2 pb-4">
             <Button
               variant="ghost"
@@ -131,7 +119,6 @@ export default function Layout({ children }) {
         </nav>
       </div>
 
-      {/* Main Content */}
       <div
         className={`flex-1 overflow-auto bg-gray-50 transition-all duration-300 ${
           isOpen && !isMobile ? 'ml-64' : 'ml-16'
@@ -142,7 +129,6 @@ export default function Layout({ children }) {
         </main>
       </div>
 
-      {/* Mobile Backdrop */}
       {isMobile && isOpen && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 z-30"

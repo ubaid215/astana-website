@@ -177,8 +177,8 @@ export default function ProfilePage() {
                   <TableHead>Collector Name</TableHead>
                   <TableHead>Members</TableHead>
                   <TableHead>Cow Quality</TableHead>
-                  <TableHead>Day</TableHead>
-                  <TableHead>Time Slot</TableHead>
+                  {/* <TableHead>Day</TableHead> */}
+                  {/* <TableHead>Time Slot</TableHead> */}
                   <TableHead>Shares</TableHead>
                   <TableHead>Total Amount</TableHead>
                   <TableHead>Payment Status</TableHead>
@@ -207,8 +207,8 @@ export default function ProfilePage() {
                         {Array.isArray(p.members) && p.members.length > 0 ? p.members.join(', ') : 'N/A'}
                       </TableCell>
                       <TableCell>{p.cowQuality}</TableCell>
-                      <TableCell>Day {p.day}</TableCell>
-                      <TableCell>{p.timeSlot || 'Not Assigned'}</TableCell>
+                      {/* <TableCell>Day {p.day}</TableCell> */}
+                      {/* <TableCell>{p.timeSlot || 'Not Assigned'}</TableCell> */}
                       <TableCell>{p.shares}</TableCell>
                       <TableCell>{p.totalAmount.toLocaleString()}</TableCell>
                       <TableCell>{p.paymentStatus}</TableCell>

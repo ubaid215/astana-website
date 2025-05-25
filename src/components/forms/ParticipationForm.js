@@ -25,69 +25,73 @@ export default function ParticipationForm() {
     totalAmount: 0,
   });
   const [availableSlots, setAvailableSlots] = useState([]);
+  const [shareLimits, setShareLimits] = useState({
+    standard: 7,
+    medium: 7,
+    premium: 7,
+    remainingShares: { standard: 7, medium: 7, premium: 7 },
+  });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [isTermsAccepted, setIsTermsAccepted] = useState(false);
   const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
   const [termsLanguage, setTermsLanguage] = useState('Urdu');
   const [pricesLoading, setPricesLoading] = useState(true);
+  const [limitsLoading, setLimitsLoading] = useState(true);
 
-  // Validate prices object
-  const isValidPrices = (prices) => {
-    if (!prices || typeof prices !== 'object') return false;
-    const validateTier = (tier) => {
-      if (typeof tier === 'number') {
-        return tier > 0;
-      }
-      return (
-        tier &&
-        typeof tier.price === 'number' &&
-        tier.price > 0 &&
-        (typeof tier.message === 'string' || tier.message === undefined)
-      );
-    };
-    return (
-      validateTier(prices.standard) &&
-      validateTier(prices.medium) &&
-      validateTier(prices.premium)
-    );
-  };
-
-  // Fetch prices
   useEffect(() => {
-    const normalizePrices = (prices) => {
-      if (!prices) return null;
-      if (typeof prices.standard === 'number') {
-        return {
-          standard: { price: prices.standard, message: '' },
-          medium: { price: prices.medium, message: '' },
-          premium: { price: prices.premium, message: '' },
-        };
+    const fetchShareLimits = async () => {
+      setLimitsLoading(true);
+      try {
+        const res = await fetch('/api/admin/share-limits');
+        if (!res.ok) throw new Error(`Failed to fetch share limits: ${res.status}`);
+        const data = await res.json();
+        setShareLimits({
+          standard: data.standard ?? 7,
+          medium: data.medium ?? 7,
+          premium: data.premium ?? 7,
+          remainingShares: data.remainingShares ?? { standard: 7, medium: 7, premium: 7 },
+        });
+        setError('');
+      } catch (err) {
+        console.error('[ParticipationForm] Failed to fetch share limits:', err);
+        setError('Failed to load share limits. Using defaults.');
+        setShareLimits({
+          standard: 7,
+          medium: 7,
+          premium: 7,
+          remainingShares: { standard: 7, medium: 7, premium: 7 },
+        });
+      } finally {
+        setLimitsLoading(false);
       }
-      return prices;
     };
 
+    fetchShareLimits();
+  }, []);
+
+  useEffect(() => {
     const fetchPrices = async () => {
       setPricesLoading(true);
       try {
         const res = await fetch('/api/admin/prices');
         if (!res.ok) throw new Error(`Failed to fetch prices: ${res.status}`);
         const data = await res.json();
-        const normalizedPrices = normalizePrices(data);
-        if (isValidPrices(normalizedPrices)) {
-          setPrices(normalizedPrices);
+        if (
+          data.standard?.price &&
+          data.medium?.price &&
+          data.premium?.price &&
+          typeof data.standard.price === 'number' &&
+          typeof data.medium.price === 'number' &&
+          typeof data.premium.price === 'number'
+        ) {
+          setPrices(data);
           setError('');
         } else {
-          console.warn('Invalid prices structure:', normalizedPrices);
-          setError('Price data format is invalid');
-          setPrices({
-            standard: { price: 25000, message: '' },
-            medium: { price: 30000, message: '' },
-            premium: { price: 35000, message: '' },
-          });
+          throw new Error('Invalid price data');
         }
       } catch (err) {
-        console.error('Failed to fetch prices:', err);
+        console.error('[ParticipationForm] Failed to fetch prices:', err);
         setError('Failed to load prices. Using default prices.');
         setPrices({
           standard: { price: 25000, message: '' },
@@ -99,12 +103,11 @@ export default function ParticipationForm() {
       }
     };
 
-    if (!isValidPrices(prices)) {
+    if (!prices) {
       fetchPrices();
     }
   }, [prices, setPrices]);
 
-  // Fetch available slots
   useEffect(() => {
     const fetchAvailableSlots = async () => {
       try {
@@ -119,15 +122,14 @@ export default function ParticipationForm() {
         });
         if (!res.ok) throw new Error('Failed to fetch available slots');
         const data = await res.json();
-        setAvailableSlots(data.availableSlots || TIME_SLOTS[formData.day] || TIME_SLOTS[1]);
-        console.log('[ParticipationForm] Fetched available slots:', data);
+        setAvailableSlots(data.availableSlots || TIME_SLOTS[formData.day || '1']);
         if (formData.timeSlot && !data.availableSlots.includes(formData.timeSlot)) {
           setFormData((prev) => ({ ...prev, timeSlot: '' }));
           setError('Selected time slot is no longer available. Please choose another.');
         }
       } catch (err) {
-        console.error('[ParticipationForm] Failed to fetch available slots:', err);
-        setAvailableSlots(TIME_SLOTS[formData.day] || TIME_SLOTS[1]);
+        console.error('[ParticipationFormData] Failed to fetch available slots:', err);
+        setAvailableSlots(TIME_SLOTS[formData.day || '1']);
       }
     };
 
@@ -136,20 +138,64 @@ export default function ParticipationForm() {
     }
   }, [formData.day, formData.cowQuality, formData.country]);
 
-  // Socket.IO listeners
   useEffect(() => {
     if (socket) {
+      socket.on('shareLimitsUpdated', (newLimits) => {
+        console.log('[ParticipationForm] Share limits updated via Socket.IO:', newLimits);
+        setShareLimits({
+          standard: newLimits.standard ?? 7,
+          medium: newLimits.medium ?? 7,
+          premium: newLimits.premium ?? 7,
+          remainingShares: newLimits.remainingShares ?? {
+            standard: newLimits.standard - (newLimits.participatedShares?.standard || 0),
+            medium: newLimits.medium - (newLimits.participatedShares?.medium || 0),
+            premium: newLimits.premium - (newLimits.participatedShares?.premium || 0),
+          },
+        });
+        if (formData.cowQuality) {
+          const maxShares = newLimits[formData.cowQuality.toLowerCase()] ?? 7;
+          const remainingShares = newLimits.remainingShares?.[formData.cowQuality.toLowerCase()] ?? maxShares;
+          if (remainingShares === 0) {
+            setFormData((prev) => ({
+              ...prev,
+              cowQuality: '',
+              shares: 1,
+              members: [{ name: '', fatherName: '', gender: '' }],
+              totalAmount: 0,
+            }));
+            setError(`This cow quality (${formData.cowQuality}) has closed, choose another one.`);
+          } else if (formData.shares > remainingShares) {
+            setFormData((prev) => ({
+              ...prev,
+              shares: remainingShares,
+              members: Array(remainingShares)
+                .fill()
+                .map((_, i) => prev.members[i] || { name: '', fatherName: '', gender: '' }),
+              totalAmount: prices[formData.cowQuality.toLowerCase()]?.price * remainingShares || 0,
+            }));
+            setError(`Shares adjusted to ${remainingShares} due to updated limit for ${formData.cowQuality}.`);
+          }
+        }
+      });
+
       socket.on('pricesUpdated', (newPrices) => {
         console.log('[ParticipationForm] Prices updated via Socket.IO:', newPrices);
-        if (isValidPrices(newPrices)) {
+        if (
+          newPrices.standard?.price &&
+          newPrices.medium?.price &&
+          newPrices.premium?.price
+        ) {
           setPrices(newPrices);
-          setError('');
+          if (formData.cowQuality) {
+            setFormData((prev) => ({
+              ...prev,
+              totalAmount: newPrices[prev.cowQuality.toLowerCase()]?.price * prev.shares || 0,
+            }));
+          }
         } else {
-          console.warn('[ParticipationForm] Invalid socket prices data:', newPrices);
-          setPrices(null);
-          setError('Invalid price data received from server. Please try again.');
+          console.warn('[ParticipationForm] Invalid prices data:', newPrices);
+          setError('Invalid price data received. Please try again.');
         }
-        setPricesLoading(false);
       });
 
       socket.on('slotCreated', (newSlot) => {
@@ -211,7 +257,7 @@ export default function ParticipationForm() {
             });
             if (!res.ok) throw new Error('Failed to fetch available slots');
             const data = await res.json();
-            setAvailableSlots(data.availableSlots || TIME_SLOTS[formData.day] || TIME_SLOTS[1]);
+            setAvailableSlots(data.availableSlots || TIME_SLOTS[formData.day || '1']);
           } catch (err) {
             console.error('[ParticipationForm] Failed to refresh slots:', err);
           }
@@ -222,20 +268,44 @@ export default function ParticipationForm() {
       });
 
       return () => {
+        socket.off('shareLimitsUpdated');
         socket.off('pricesUpdated');
         socket.off('slotCreated');
         socket.off('slotDeleted');
       };
     }
-  }, [socket, setPrices, formData.day, formData.cowQuality, formData.country, formData.timeSlot]);
+  }, [socket, setPrices, formData.day, formData.cowQuality, formData.country, formData.timeSlot, formData.shares, prices]);
 
-  // Update total amount
   useEffect(() => {
-    if (isValidPrices(prices) && formData.cowQuality && formData.shares) {
+    if (prices && formData.cowQuality) {
       const priceKey = formData.cowQuality.toLowerCase();
+      const maxShares = shareLimits[priceKey] ?? 7;
+      const remainingShares = shareLimits.remainingShares[priceKey] ?? maxShares;
+      let adjustedShares = formData.shares;
+
+      if (remainingShares === 0) {
+        setFormData((prev) => ({
+          ...prev,
+          cowQuality: '',
+          shares: 1,
+          members: [{ name: '', fatherName: '', gender: '' }],
+          totalAmount: 0,
+        }));
+        setError(`This cow quality (${formData.cowQuality}) has closed, choose another one.`);
+      } else if (formData.shares > remainingShares) {
+        adjustedShares = remainingShares;
+        setError(`Only ${remainingShares} shares remaining for ${formData.cowQuality} quality. Shares adjusted.`);
+      } else {
+        setError('');
+      }
+
       setFormData((prev) => ({
         ...prev,
-        totalAmount: prices[priceKey].price * formData.shares,
+        shares: adjustedShares,
+        members: Array(adjustedShares)
+          .fill()
+          .map((_, i) => prev.members[i] || { name: '', fatherName: '', gender: '' }),
+        totalAmount: prices[priceKey]?.price * adjustedShares || 0,
       }));
     } else {
       setFormData((prev) => ({
@@ -243,21 +313,46 @@ export default function ParticipationForm() {
         totalAmount: 0,
       }));
     }
-  }, [formData.cowQuality, formData.shares, prices]);
+  }, [formData.cowQuality, prices, shareLimits]);
 
   const handleSharesChange = (value) => {
-    const shares = parseInt(value) || 1;
-    if (formData.timeSlot === '03:30 PM - 04:00 PM' && shares > 7) {
-      setError('For the 03:30 PM - 04:00 PM time slot, a maximum of 7 shares is allowed.');
+    let shares = parseInt(value) || 1;
+    const priceKey = formData.cowQuality.toLowerCase();
+    const maxShares = shareLimits[priceKey] ?? 7;
+    const remainingShares = shareLimits.remainingShares[priceKey] ?? maxShares;
+
+    if (remainingShares === 0) {
+      setError(`This cow quality (${formData.cowQuality}) has closed, choose another one.`);
+      setFormData((prev) => ({
+        ...prev,
+        cowQuality: '',
+        shares: 1,
+        members: [{ name: '', fatherName: '', gender: '' }],
+        totalAmount: 0,
+      }));
       return;
     }
-    setError('');
+
+    if (formData.timeSlot === '03:30 PM - 04:00 PM' && shares > 7) {
+      setError('For the 03:30 PM - 04:00 PM time slot, a maximum of 7 shares is allowed.');
+      shares = 7;
+    } else if (shares > remainingShares) {
+      setError(`Only ${remainingShares} shares remaining for ${formData.cowQuality} quality.`);
+      shares = remainingShares;
+    } else if (shares < 1) {
+      shares = 1;
+      setError('At least 1 share is required.');
+    } else {
+      setError('');
+    }
+
     setFormData((prev) => ({
       ...prev,
-      shares: formData.timeSlot === '03:30 PM - 04:00 PM' ? Math.min(shares, 7) : shares,
-      members: Array(formData.timeSlot === '03:30 PM - 04:00 PM' ? Math.min(shares, 7) : shares)
+      shares,
+      members: Array(shares)
         .fill()
         .map((_, i) => prev.members[i] || { name: '', fatherName: '', gender: '' }),
+      totalAmount: prices[priceKey]?.price * shares || 0,
     }));
   };
 
@@ -301,12 +396,23 @@ export default function ParticipationForm() {
       setError('Please accept the terms and conditions');
       return;
     }
-    if (pricesLoading || !isValidPrices(prices)) {
-      setError('Prices are not loaded. Please wait or refresh the page.');
+    if (pricesLoading || limitsLoading || !prices) {
+      setError('Data not loaded. Please wait or refresh the page.');
       return;
     }
 
-    // Combine name and fatherName into "Name Bin/Bint-e FatherName"
+    const priceKey = formData.cowQuality.toLowerCase();
+    const maxShares = shareLimits[priceKey] ?? 7;
+    const remainingShares = shareLimits.remainingShares[priceKey] ?? maxShares;
+    if (remainingShares === 0) {
+      setError(`This cow quality (${formData.cowQuality}) has closed, choose another one.`);
+      return;
+    }
+    if (formData.shares > remainingShares) {
+      setError(`Only ${remainingShares} shares remaining for ${formData.cowQuality} quality.`);
+      return;
+    }
+
     const combinedMembers = formData.members.map((member) => {
       const connector = member.gender === 'Female' ? 'Bint-e' : 'Bin';
       return `${member.name} ${connector} ${member.fatherName}`;
@@ -326,11 +432,7 @@ export default function ParticipationForm() {
 
       if (!res.ok) {
         const errorData = await res.json();
-        if (errorData.error.includes('Not enough capacity') || errorData.error.includes('No available slots')) {
-          setError(errorData.error);
-        } else {
-          throw new Error(errorData.error || 'Submission failed');
-        }
+        setError(errorData.error || 'Submission failed');
       } else {
         router.push('/profile');
       }
@@ -448,30 +550,48 @@ If any stakeholder passes away before the sacrifice is performed, this must be p
                 value={formData.cowQuality}
                 onValueChange={(value) => setFormData({ ...formData, cowQuality: value })}
                 required
-                disabled={pricesLoading}
+                disabled={pricesLoading || limitsLoading}
               >
                 <SelectTrigger className="w-full border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
-                  <SelectValue placeholder={pricesLoading ? "Loading prices..." : "Select quality"} />
+                  <SelectValue placeholder={pricesLoading || limitsLoading ? "Loading..." : "Select quality"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {isValidPrices(prices) ? (
+                  {prices && !pricesLoading && !limitsLoading ? (
                     <>
-                      <SelectItem value="Standard">
-                        Standard ({prices.standard.price.toLocaleString('en-PK', { style: 'currency', currency: 'PKR' })}/share)
-                        {prices.standard.message && ` - ${prices.standard.message}`}
-                      </SelectItem>
-                      <SelectItem value="Medium">
-                        Medium ({prices.medium.price.toLocaleString('en-PK', { style: 'currency', currency: 'PKR' })}/share)
-                        {prices.medium.message && ` - ${prices.medium.message}`}
-                      </SelectItem>
-                      <SelectItem value="Premium">
-                        Premium ({prices.premium.price.toLocaleString('en-PK', { style: 'currency', currency: 'PKR' })}/share)
-                        {prices.premium.message && ` - ${prices.premium.message}`}
-                      </SelectItem>
+                      {shareLimits.remainingShares.standard === 0 ? (
+                        <SelectItem value="Standard" disabled>
+                          Standard (Closed)
+                        </SelectItem>
+                      ) : (
+                        <SelectItem value="Standard">
+                          Standard ({prices.standard.price.toLocaleString('en-PK', { style: 'currency', currency: 'PKR' })}/share, {shareLimits.remainingShares.standard} shares remaining)
+                          {prices.standard.message && ` - ${prices.standard.message}`}
+                        </SelectItem>
+                      )}
+                      {shareLimits.remainingShares.medium === 0 ? (
+                        <SelectItem value="Medium" disabled>
+                          Medium (Closed)
+                        </SelectItem>
+                      ) : (
+                        <SelectItem value="Medium">
+                          Medium ({prices.medium.price.toLocaleString('en-PK', { style: 'currency', currency: 'PKR' })}/share, {shareLimits.remainingShares.medium} shares remaining)
+                          {prices.medium.message && ` - ${prices.medium.message}`}
+                        </SelectItem>
+                      )}
+                      {shareLimits.remainingShares.premium === 0 ? (
+                        <SelectItem value="Premium" disabled>
+                          Premium (Closed)
+                        </SelectItem>
+                      ) : (
+                        <SelectItem value="Premium">
+                          Premium ({prices.premium.price.toLocaleString('en-PK', { style: 'currency', currency: 'PKR' })}/share, {shareLimits.remainingShares.premium} shares remaining)
+                          {prices.premium.message && ` - ${prices.premium.message}`}
+                        </SelectItem>
+                      )}
                     </>
                   ) : (
                     <SelectItem value="" disabled>
-                      {pricesLoading ? 'Loading prices...' : 'Price information unavailable'}
+                      {pricesLoading || limitsLoading ? 'Loading...' : 'Data unavailable'}
                     </SelectItem>
                   )}
                 </SelectContent>
@@ -524,23 +644,39 @@ If any stakeholder passes away before the sacrifice is performed, this must be p
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <label
-                htmlFor="shares"
-                className="block text-sm font-medium text-gray-700 mb-1"
+            <div className="flex items-center space-x-2">
+              <Button
+                type="button"
+                onClick={() => handleSharesChange((formData.shares - 1).toString())}
+                disabled={formData.shares <= 1}
+                className="px-3 py-1 bg-gray-200 text-gray-700 rounded"
               >
-                Number of Shares
-              </label>
+                -
+              </Button>
               <Input
                 id="shares"
                 type="number"
                 min="1"
+                max={formData.cowQuality ? shareLimits.remainingShares[formData.cowQuality.toLowerCase()] || 7 : 7}
                 value={formData.shares}
                 onChange={(e) => handleSharesChange(e.target.value)}
                 required
-                className="w-full border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+                disabled={shareLimits.remainingShares[formData.cowQuality?.toLowerCase()] === 0}
+                className="w-full border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 appearance-textfield [&::-webkit-inner-spin-button]:appearance-inner-spin-button [&::-webkit-outer-spin-button]:appearance-inner-spin-button"
                 placeholder="1"
               />
+              <Button
+                type="button"
+                onClick={() => handleSharesChange((formData.shares + 1).toString())}
+                disabled={
+                  formData.cowQuality &&
+                  (shareLimits.remainingShares[formData.cowQuality.toLowerCase()] === 0 ||
+                    formData.shares >= (shareLimits.remainingShares[formData.cowQuality.toLowerCase()] || 7))
+                }
+                className="px-3 py-1 bg-gray-200 text-gray-700 rounded"
+              >
+                +
+              </Button>
             </div>
             <div>
               <label
@@ -649,11 +785,11 @@ If any stakeholder passes away before the sacrifice is performed, this must be p
           <Button
             type="submit"
             className={`w-full mt-8 bg-indigo-600 text-white rounded-lg py-3 text-sm font-medium hover:bg-indigo-700 transition-colors ${
-              !isTermsAccepted || loading || pricesLoading || !isValidPrices(prices)
+              !isTermsAccepted || loading || pricesLoading || limitsLoading || !prices
                 ? 'opacity-50 cursor-not-allowed'
                 : ''
             }`}
-            disabled={loading || pricesLoading || !isValidPrices(prices) || !isTermsAccepted}
+            disabled={loading || pricesLoading || limitsLoading || !prices || !isTermsAccepted}
           >
             {loading ? 'Submitting...' : 'Submit Participation'}
           </Button>
@@ -668,7 +804,9 @@ If any stakeholder passes away before the sacrifice is performed, this must be p
               <h4 className="text-lg font-semibold text-gray-800 mb-2">
                 Meezan Bank
               </h4>
-              <p className="text-sm text-primary">Account Title: Munawar Hussnain</p>
+              <p
+
+ className="text-sm text-primary">Account Title: Munawar Hussnain</p>
               <p className="text-sm font-medium text-gray-600">IBAN Number:</p>
               <p className="text-sm text-gray-800">
                 PK40MEZN0004170110884115
