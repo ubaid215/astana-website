@@ -8,7 +8,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useSession } from 'next-auth/react';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Input } from '@/components/ui/Input';
-import { Edit2, Check, X, GripVertical } from 'lucide-react';
+import { Edit2, Check, X, GripVertical, RotateCcw } from 'lucide-react';
 
 // Global drag state to share between component instances
 let globalDragState = {
@@ -27,8 +27,59 @@ export default function SlotTable({ initialSlots, day }) {
 
   const [editingParticipant, setEditingParticipant] = useState(null);
   const [editedName, setEditedName] = useState('');
+  const [nameError, setNameError] = useState('');
+  const [showConfirm, setShowConfirm] = useState(null);
   const [dragOverTarget, setDragOverTarget] = useState(null);
   const [forceUpdate, setForceUpdate] = useState(0);
+  const [canUndo, setCanUndo] = useState(() => {
+    return localStorage.getItem('canUndo') === 'true';
+  });
+  const [undoChecked, setUndoChecked] = useState(false); // Track if we've checked undo availability
+  const [undoError, setUndoError] = useState(null); // Track errors in undo availability check
+
+  // Check if undo is available on the server when the component mounts
+  useEffect(() => {
+    const checkUndoAvailability = async () => {
+      try {
+        const response = await fetch('/api/slots/undo-available', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to check undo availability');
+        }
+
+        const data = await response.json();
+        console.log('[SlotTable] Undo availability:', data);
+        setCanUndo(data.canUndo);
+        setUndoChecked(true);
+        setUndoError(null);
+      } catch (error) {
+        console.error('[SlotTable] Error checking undo availability:', error.message);
+        setUndoError(error.message);
+        setUndoChecked(true);
+        // Do not show toast repeatedly; we'll display the error in the UI
+      }
+    };
+
+    if (isAdmin && !undoChecked) {
+      checkUndoAvailability();
+    }
+  }, [isAdmin, undoChecked]);
+
+  // Sync canUndo with localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('canUndo', canUndo.toString());
+  }, [canUndo]);
+
+  // Debug state updates
+  useEffect(() => {
+    console.log('[SlotTable] editingParticipant updated:', editingParticipant);
+  }, [editingParticipant]);
 
   useEffect(() => {
     const filteredInitial = initialSlots.filter(s => s.day === day);
@@ -109,29 +160,46 @@ export default function SlotTable({ initialSlots, day }) {
     };
 
     const handleParticipantNameUpdated = ({ slotId, participationId, index, newName }) => {
-      console.log('[SlotTable] Participant name updated:', { slotId, participationId, index, newName });
-      setSlots((prevSlots) => {
-        const updatedSlots = prevSlots.map((slot) => {
-          if (slot._id === slotId) {
+      console.log('Received name update:', { slotId, participationId, index, newName });
+      
+      setSlots(prevSlots => {
+        return prevSlots.map(slot => {
+          if (slot._id.toString() === slotId) {
             return {
               ...slot,
-              participants: slot.participants.map((participant) => {
-                if (participant.participationId === participationId) {
+              participants: slot.participants.map(participant => {
+                if (participant.participationId.toString() === participationId) {
                   const updatedNames = [...participant.participantNames];
                   updatedNames[index] = newName;
                   return { ...participant, participantNames: updatedNames };
                 }
                 return participant;
-              }),
+              })
             };
           }
           return slot;
         });
-        return updatedSlots.sort((a, b) => a.timeSlot.localeCompare(b.timeSlot));
       });
+    };
+
+    const handleMergePerformed = () => {
+      setCanUndo(true);
+      setUndoChecked(true);
+      setUndoError(null);
       toast({
-        title: 'Participant Name Updated',
-        description: `Participant name updated to ${newName}`,
+        title: 'Merge Performed',
+        description: 'Slots merged successfully. You can undo this action.',
+        variant: 'success',
+      });
+    };
+
+    const handleMergeUndone = () => {
+      setCanUndo(false);
+      setUndoChecked(true);
+      setUndoError(null);
+      toast({
+        title: 'Merge Undone',
+        description: 'The last merge operation was successfully undone.',
         variant: 'success',
       });
     };
@@ -141,6 +209,8 @@ export default function SlotTable({ initialSlots, day }) {
     socket.on('slotUpdated', handleSlotUpdated);
     socket.on('slotCompleted', handleSlotCompleted);
     socket.on('participantNameUpdated', handleParticipantNameUpdated);
+    socket.on('mergePerformed', handleMergePerformed);
+    socket.on('mergeUndone', handleMergeUndone);
     socket.on('connect_error', (error) => {
       console.warn('[SlotTable] Socket.IO connection error:', error.message);
       toast({
@@ -156,6 +226,8 @@ export default function SlotTable({ initialSlots, day }) {
       socket.off('slotUpdated', handleSlotUpdated);
       socket.off('slotCompleted', handleSlotCompleted);
       socket.off('participantNameUpdated', handleParticipantNameUpdated);
+      socket.off('mergePerformed', handleMergePerformed);
+      socket.off('mergeUndone', handleMergeUndone);
       socket.off('connect_error');
       console.log('[SlotTable] Cleaned up socket event listeners');
     };
@@ -170,6 +242,93 @@ export default function SlotTable({ initialSlots, day }) {
 
     return () => clearInterval(interval);
   }, []);
+
+  const validateName = (name) => {
+    if (!name || name.trim() === '') {
+      return 'Participant name cannot be empty';
+    }
+    if (!/^[a-zA-Z\s-]+$/.test(name)) {
+      return 'Name can only contain letters, spaces, and hyphens';
+    }
+    if (name.length > 100) {
+      return 'Name cannot exceed 100 characters';
+    }
+    return '';
+  };
+
+  const handleEditParticipantName = useCallback(
+    async (slotId, participationId, index, newName) => {
+      try {
+        if (status !== 'authenticated' || !session?.user?.isAdmin) {
+          throw new Error('Admin access required');
+        }
+
+        const validationError = validateName(newName);
+        if (validationError) {
+          setNameError(validationError);
+          return;
+        }
+
+        console.log('Updating name:', { participationId, index, newName });
+
+        const response = await fetch('/api/participation/update-name', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            participationId, 
+            index, 
+            newName 
+          }),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to update name');
+        }
+
+        setEditingParticipant(null);
+        setEditedName('');
+        setNameError('');
+        
+      } catch (error) {
+        console.error('Error updating name:', error);
+        toast({
+          title: 'Error',
+          description: error.message,
+          variant: 'destructive',
+        });
+      }
+    },
+    [toast, session, status]
+  );
+
+  const startEditing = (slotId, participationId, index, currentName) => {
+    const slotIdStr = slotId.toString();
+    const participationIdStr = participationId.toString();
+    console.log('[SlotTable] Starting edit:', {
+      slotId: slotIdStr,
+      slotIdType: typeof slotIdStr,
+      participationId: participationIdStr,
+      participationIdType: typeof participationIdStr,
+      index,
+      indexType: typeof index,
+      currentName
+    });
+    setEditingParticipant({ slotId: slotIdStr, participationId: participationIdStr, index });
+    setEditedName(currentName);
+    setNameError('');
+    setShowConfirm(null);
+  };
+
+  const cancelEditing = () => {
+    console.log('[SlotTable] Canceling edit');
+    setEditingParticipant(null);
+    setEditedName('');
+    setNameError('');
+    setShowConfirm(null);
+  };
 
   const handleDeleteSlot = useCallback(
     async (slotId) => {
@@ -253,69 +412,74 @@ export default function SlotTable({ initialSlots, day }) {
     [toast, session, status]
   );
 
-  const handleEditParticipantName = useCallback(
-    async (slotId, participationId, index, newName) => {
-      try {
-        if (status !== 'authenticated' || !session?.user?.isAdmin) {
-          throw new Error('Admin access required');
-        }
-
-        if (!participationId || !participationId.match(/^[0-9a-fA-F]{24}$/)) {
-          throw new Error('Invalid participation ID');
-        }
-        if (typeof index !== 'number' || index < 0) {
-          throw new Error('Invalid index');
-        }
-        if (typeof newName !== 'string' || newName.trim() === '') {
-          throw new Error('Participant name cannot be empty');
-        }
-
-        console.log('[SlotTable] Sending PATCH request:', { slotId, participationId, index, newName });
-
-        const response = await fetch(`/api/slots/${slotId}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ participationId, index, newName }),
-        });
-
-        if (!response.ok) {
-          const error = await response.json();
-          console.error('[SlotTable] PATCH request failed:', error);
-          throw new Error(error.error || 'Failed to update participant name');
-        }
-
-        toast({
-          title: 'Success',
-          description: 'Participant name updated successfully',
-          variant: 'success',
-        });
-
-        if (socket && connected) {
-          socket.emit('participantNameUpdated', { slotId, participationId, index, newName });
-        }
-
-        setEditingParticipant(null);
-        setEditedName('');
-      } catch (error) {
-        console.error('Error updating participant name:', error.message);
-        toast({
-          title: 'Error',
-          description: `Failed to update participant name: ${error.message}`,
-          variant: 'destructive',
-        });
+  const handleUndoMerge = useCallback(async () => {
+    try {
+      if (status !== 'authenticated' || !session?.user?.isAdmin) {
+        throw new Error('Admin access required');
       }
-    },
-    [toast, session, status, socket, connected]
-  );
 
-  // Helper function to check if a slot can accommodate a participant
+      console.log('[SlotTable] Initiating undo merge request');
+      const response = await fetch('/api/slots/undo', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      console.log('[SlotTable] Undo response status:', response.status);
+      if (!response.ok) {
+        let errorMessage = 'Failed to undo merge';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch (jsonError) {
+          console.error('[SlotTable] Failed to parse JSON response:', jsonError);
+          const responseText = await response.text();
+          console.error('[SlotTable] Raw response:', responseText);
+          errorMessage = 'Invalid server response';
+        }
+        throw new Error(errorMessage);
+      }
+
+      const updatedSlots = await response.json();
+      setSlots(updatedSlots);
+      const checkResponse = await fetch('/api/slots/undo-available', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      if (checkResponse.ok) {
+        const data = await checkResponse.json();
+        setCanUndo(data.canUndo);
+        setUndoChecked(true);
+        setUndoError(null);
+      } else {
+        setCanUndo(false);
+        setUndoChecked(true);
+        setUndoError('Failed to check undo availability after undo');
+      }
+      toast({
+        title: 'Success',
+        description: 'Merge undone successfully',
+        variant: 'success',
+      });
+    } catch (error) {
+      console.error('[SlotTable] Error undoing merge:', error.message);
+      toast({
+        title: 'Error',
+        description: `Failed to undo merge: ${error.message}`,
+        variant: 'destructive',
+      });
+    }
+  }, [toast, session, status, setSlots]);
+
   const canSlotAccommodate = (targetSlot, draggedSlot) => {
     if (!targetSlot || !draggedSlot) return false;
+    if (targetSlot.cowQuality !== draggedSlot.cowQuality) return false;
     const currentShares = targetSlot.participants.reduce((sum, p) => sum + p.shares, 0);
     const draggedShares = draggedSlot.participants.reduce((sum, p) => sum + p.shares, 0);
-    return (currentShares + draggedShares) <= 7; // Assuming max capacity of 7 shares
+    return currentShares + draggedShares <= 7;
   };
 
   const handleDragStart = (e, slot) => {
@@ -323,11 +487,11 @@ export default function SlotTable({ initialSlots, day }) {
       console.warn('🚫 [SlotTable] Drag blocked - not admin');
       return;
     }
-    
+
     globalDragState.draggedSlot = slot;
     globalDragState.sourceDay = day;
     globalDragState.dragInProgress = true;
-    
+
     e.dataTransfer.setData('application/json', JSON.stringify({
       slotId: slot._id,
       timeSlot: slot.timeSlot,
@@ -375,7 +539,7 @@ export default function SlotTable({ initialSlots, day }) {
       console.warn('🚫 [SlotTable] Drop blocked - not admin');
       return;
     }
-    
+
     e.preventDefault();
     e.stopPropagation();
     setDragOverTarget(null);
@@ -388,6 +552,11 @@ export default function SlotTable({ initialSlots, day }) {
 
     if (sourceSlot._id === targetSlot._id) {
       toast({ title: 'Info', description: 'Cannot drop on the same slot', variant: 'default' });
+      return;
+    }
+
+    if (sourceSlot.cowQuality !== targetSlot.cowQuality) {
+      toast({ title: 'Error', description: 'Slots must have the same cow quality', variant: 'destructive' });
       return;
     }
 
@@ -423,7 +592,7 @@ export default function SlotTable({ initialSlots, day }) {
       console.warn('🚫 [SlotTable] Drop blocked - not admin');
       return;
     }
-    
+
     e.preventDefault();
     e.stopPropagation();
     setDragOverTarget(null);
@@ -443,7 +612,7 @@ export default function SlotTable({ initialSlots, day }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sourceSlotId: sourceSlot._id,
-          destSlotId: null, // Indicate day drop to create new slot
+          destSlotId: null,
           sourceDay: globalDragState.sourceDay,
           destDay: targetDay,
         }),
@@ -473,16 +642,20 @@ export default function SlotTable({ initialSlots, day }) {
     globalDragState.sourceDay = null;
   };
 
-  const startEditing = (slotId, participationId, index, currentName) => {
-    console.log('[SlotTable] Starting edit:', { slotId, participationId, index, currentName });
-    setEditingParticipant({ slotId, participationId, index });
-    setEditedName(currentName);
+  const handleConfirmEdit = (slotId, participationId, index, newName) => {
+    const slotIdStr = slotId.toString();
+    const participationIdStr = participationId.toString();
+    const validationError = validateName(newName);
+    if (validationError) {
+      setNameError(validationError);
+      return;
+    }
+    setShowConfirm({ slotId: slotIdStr, participationId: participationIdStr, index, newName });
   };
 
-  const cancelEditing = () => {
-    console.log('[SlotTable] Canceling edit');
-    setEditingParticipant(null);
-    setEditedName('');
+  const cancelConfirm = () => {
+    setShowConfirm(null);
+    setNameError('');
   };
 
   const filteredSlots = slots
@@ -510,21 +683,45 @@ export default function SlotTable({ initialSlots, day }) {
     <div className="bg-white rounded-lg shadow-md p-6 mb-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-semibold text-primary">Day {day} Slots</h2>
-        {isAdmin && (
-          <div className="text-sm text-gray-600">
-            <span className="flex items-center gap-2">
-              <GripVertical className="h-4 w-4" />
-              Drag slots to merge within or across days
-            </span>
-          </div>
-        )}
+        <div className="flex items-center gap-4">
+          {isAdmin && (
+            <div className="text-sm text-gray-600">
+              <span className="flex items-center gap-2">
+                <GripVertical className="h-4 w-4" />
+                Drag slots to merge within or across days
+              </span>
+            </div>
+          )}
+          {isAdmin && undoChecked && !undoError && canUndo && (
+            <Button
+              size="sm"
+              onClick={handleUndoMerge}
+              className="bg-yellow-600 hover:bg-yellow-700"
+              aria-label="Undo last merge"
+              title="Undo last merge"
+            >
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Undo Merge
+            </Button>
+          )}
+          {isAdmin && undoChecked && !undoError && !canUndo && (
+            <div className="text-sm text-gray-600">
+              No merging done before
+            </div>
+          )}
+          {isAdmin && undoError && (
+            <div className="text-sm text-red-600">
+              Error checking undo availability: {undoError}
+            </div>
+          )}
+        </div>
       </div>
-      
-      <div 
+
+      <div
         className={`overflow-x-auto transition-all duration-200 p-2 rounded-lg ${
-          dragOverTarget === `day-${day}` ? 
-            'bg-blue-50 border-2 border-blue-300 border-dashed shadow-inner' : 
-            'border-2 border-transparent'
+          dragOverTarget === `day-${day}`
+            ? 'bg-blue-50 border-2 border-blue-300 border-dashed shadow-inner'
+            : 'border-2 border-transparent'
         }`}
         onDragOver={handleDragOver}
         onDragEnter={handleDayDragEnter}
@@ -546,152 +743,208 @@ export default function SlotTable({ initialSlots, day }) {
           </TableHeader>
           <TableBody>
             {filteredSlots.length > 0 ? (
-              filteredSlots.map((slot) => (
-                <TableRow
-                  key={slot._id}
-                  className={`${getSlotDropZoneClass(slot)} hover:bg-gray-50`}
-                  onDragOver={handleDragOver}
-                  onDragEnter={(e) => handleSlotDragEnter(e, slot)}
-                  onDragLeave={handleDragLeave}
-                  onDrop={(e) => handleSlotDrop(e, slot)}
-                  draggable={isAdmin}
-                  onDragStart={(e) => handleDragStart(e, slot)}
-                  onDragEnd={handleDragEnd}
-                >
-                  {isAdmin && (
-                    <TableCell>
-                      <div className="cursor-move p-2 rounded-md hover:bg-gray-200">
-                        <GripVertical className="h-4 w-4 text-gray-400" />
-                      </div>
-                    </TableCell>
-                  )}
-                  <TableCell className="font-medium">{slot.timeSlot}</TableCell>
-                  <TableCell>{slot.cowQuality}</TableCell>
-                  <TableCell className="whitespace-normal break-words">
-                    {slot.participants.map(p => p.collectorName).join(' - ')}
-                  </TableCell>
-                  <TableCell className="whitespace-normal break-words max-w-xs">
-                    {slot.participants.flatMap(p =>
-                      p.participantNames.map((name, index) => (
-                        <div key={index} className="flex items-center space-y-1">
-                          <span className="text-xs text-gray-500 mr-2">{index + 1}.</span>
-                          {isAdmin && editingParticipant?.slotId === slot._id &&
-                          editingParticipant?.participationId === p.participationId &&
-                          editingParticipant?.index === index ? (
-                            <div className="flex items-center space-x-1">
-                              <Input
-                                value={editedName}
-                                onChange={(e) => setEditedName(e.target.value)}
-                                className="text-xs h-6 px-2"
-                                autoFocus
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    handleEditParticipantName(slot._id, p.participationId, index, editedName);
-                                  } else if (e.key === 'Escape') {
-                                    cancelEditing();
-                                  }
-                                }}
-                              />
-                              <Button
-                                size="sm"
-                                onClick={() =>
-                                  handleEditParticipantName(slot._id, p.participationId, index, editedName)
-                                }
-                                className="h-6 w-6 p-0 bg-green-600 hover:bg-green-700"
-                                aria-label="Save participant name"
-                                title="Save"
-                                disabled={!editedName || editedName.trim() === ''}
-                              >
-                                <Check className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                onClick={cancelEditing}
-                                className="h-6 w-6 p-0 bg-gray-600 hover:bg-gray-700"
-                                aria-label="Cancel editing"
-                                title="Cancel"
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center space-x-1 group">
-                              <span>{name}</span>
-                              {isAdmin && (
-                                <Button
-                                  size="sm"
-                                  onClick={() =>
-                                    startEditing(slot._id, p.participationId, index, name)
-                                  }
-                                  className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity bg-blue-600 hover:bg-blue-700"
-                                  aria-label="Edit participant name"
-                                  title="Edit"
-                                >
-                                  <Edit2 className="h-3 w-3" />
-                                </Button>
-                              )}
-                            </div>
-                          )}
+              filteredSlots.map((slot) => {
+                const participantEntries = [];
+                slot.participants.forEach(p => {
+                  p.participantNames.forEach((name, nameIndex) => {
+                    participantEntries.push({
+                      name,
+                      participationId: p.participationId,
+                      nameIndex,
+                    });
+                  });
+                });
+
+                return (
+                  <TableRow
+                    key={slot._id}
+                    className={`${getSlotDropZoneClass(slot)} hover:bg-gray-50`}
+                    onDragOver={handleDragOver}
+                    onDragEnter={(e) => handleSlotDragEnter(e, slot)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleSlotDrop(e, slot)}
+                    draggable={isAdmin}
+                    onDragStart={(e) => handleDragStart(e, slot)}
+                    onDragEnd={handleDragEnd}
+                  >
+                    {isAdmin && (
+                      <TableCell>
+                        <div className="cursor-move p-2 rounded-md hover:bg-gray-200">
+                          <GripVertical className="h-4 w-4 text-gray-400" />
                         </div>
-                      ))
+                      </TableCell>
                     )}
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
-                      {slot.participants.reduce((sum, p) => sum + p.shares, 0)}
-                    </span>
-                  </TableCell>
-                  {isAdmin && (
-                    <TableCell>
-                      <Checkbox
-                        checked={slot.completed || false}
-                        onCheckedChange={(checked) => handleCompleteSlot(slot._id, checked)}
-                      />
+                    <TableCell className="font-medium">{slot.timeSlot}</TableCell>
+                    <TableCell>{slot.cowQuality}</TableCell>
+                    <TableCell className="whitespace-normal break-words">
+                      {slot.participants.map(p => p.collectorName).join(' - ')}
                     </TableCell>
-                  )}
-                  {isAdmin && (
-                    <TableCell>
-                      {slot.participants.length === 1 && (
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => confirmDeleteSlot(slot._id)}
-                        >
-                          Delete
-                        </Button>
-                      )}
+                    <TableCell className="whitespace-normal break-words max-w-xs">
+                      {participantEntries.map((entry, displayIndex) => {
+                        const { name, participationId, nameIndex } = entry;
+                        console.log('[SlotTable] Rendering participant:', {
+                          slotId: slot._id?.toString(),
+                          participationId: participationId?.toString(),
+                          nameIndex,
+                          displayIndex,
+                          editingSlotId: editingParticipant?.slotId,
+                          editingParticipationId: editingParticipant?.participationId,
+                          editingIndex: editingParticipant?.index
+                        });
+                        return (
+                          <div key={`${participationId}-${nameIndex}`} className="flex items-center space-y-1">
+                            <span className="text-xs text-gray-500 mr-2">{displayIndex + 1}.</span>
+                            {isAdmin && editingParticipant?.slotId === slot._id?.toString() &&
+                            editingParticipant?.participationId === participationId?.toString() &&
+                            editingParticipant?.index === nameIndex ? (
+                              <div className="flex flex-col w-full">
+                                <div className="flex items-center space-x-1">
+                                  <Input
+                                    value={editedName}
+                                    onChange={(e) => {
+                                      setEditedName(e.target.value);
+                                      setNameError(validateName(e.target.value));
+                                    }}
+                                    className="text-xs h-6 px-2"
+                                    autoFocus
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter' && !nameError) {
+                                        handleConfirmEdit(slot._id, participationId, nameIndex, editedName);
+                                      } else if (e.key === 'Escape') {
+                                        cancelEditing();
+                                      }
+                                    }}
+                                  />
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleConfirmEdit(slot._id, participationId, nameIndex, editedName)}
+                                    className="h-6 w-6 p-0 bg-green-600 hover:bg-green-700"
+                                    aria-label="Confirm edit"
+                                    title="Confirm"
+                                    disabled={!!nameError || !editedName || editedName.trim() === ''}
+                                  >
+                                    <Check className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    onClick={cancelEditing}
+                                    className="h-6 w-6 p-0 bg-gray-600 hover:bg-gray-700"
+                                    aria-label="Cancel editing"
+                                    title="Cancel"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                                {nameError && (
+                                  <span className="text-xs text-red-600 mt-1">{nameError}</span>
+                                )}
+                              </div>
+                            ) : isAdmin && showConfirm?.slotId === slot._id?.toString() &&
+                              showConfirm?.participationId === participationId?.toString() &&
+                              showConfirm?.index === nameIndex ? (
+                              <div className="flex flex-col w-full">
+                                <span className="text-xs text-gray-600 mb-1">
+                                  Confirm change to: {showConfirm.newName}?
+                                </span>
+                                <div className="flex items-center space-x-1">
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleEditParticipantName(slot._id, participationId, nameIndex, showConfirm.newName)}
+                                    className="h-6 w-6 p-0 bg-green-600 hover:bg-green-700"
+                                    aria-label="Confirm name change"
+                                    title="Confirm"
+                                  >
+                                    <Check className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    onClick={cancelConfirm}
+                                    className="h-6 w-6 p-0 bg-gray-600 hover:bg-gray-700"
+                                    aria-label="Cancel confirmation"
+                                    title="Cancel"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-center space-x-1 group">
+                                <span>{name}</span>
+                                {isAdmin && (
+                                  <Button
+                                    size="sm"
+                                    onClick={() =>
+                                      startEditing(slot._id, participationId, nameIndex, name)
+                                    }
+                                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity bg-blue-600 hover:bg-blue-700"
+                                    aria-label="Edit participant name"
+                                    title="Edit"
+                                  >
+                                    <Edit2 className="h-3 w-3" />
+                                  </Button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </TableCell>
-                  )}
-                </TableRow>
-              ))
+                    <TableCell className="font-medium">
+                      <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+                        {slot.participants.reduce((sum, p) => sum + p.shares, 0)}
+                      </span>
+                    </TableCell>
+                    {isAdmin && (
+                      <TableCell>
+                        <Checkbox
+                          checked={slot.completed || false}
+                          onCheckedChange={(checked) => handleCompleteSlot(slot._id, checked)}
+                        />
+                      </TableCell>
+                    )}
+                    {isAdmin && (
+                      <TableCell>
+                        {slot.participants.length === 1 && (
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => confirmDeleteSlot(slot._id)}
+                          >
+                            Delete
+                          </Button>
+                        )}
+                      </TableCell>
+                    )}
+                  </TableRow>
+                );
+              })
             ) : (
               <TableRow>
                 <TableCell colSpan={isAdmin ? 8 : 5} className="text-center py-12">
                   <div className={`transition-all duration-200 ${
-                    dragOverTarget === `day-${day}` ? 
-                      'text-blue-600 font-medium text-lg animate-pulse' : 
-                      'text-gray-500'
+                    dragOverTarget === `day-${day}`
+                      ? 'text-blue-600 font-medium text-lg animate-pulse'
+                      : 'text-gray-500'
                   }`}>
-                    {dragOverTarget === `day-${day}` ? 
-                      '📥 Drop slot here to add to this day' : 
-                      `No slots assigned for Day ${day}`
-                    }
+                    {dragOverTarget === `day-${day}`
+                      ? '📥 Drop slot here to add to this day'
+                      : `No slots assigned for Day ${day}`}
                   </div>
                 </TableCell>
               </TableRow>
             )}
           </TableBody>
         </Table>
-        
+
         {isAdmin && globalDragState.dragInProgress && (
           <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
             <div className="text-sm text-blue-800">
               <strong>💡 Drag & Drop Tips:</strong>
               <ul className="mt-2 ml-4 list-disc space-y-1">
-                <li>Drop on a specific slot row to merge (if cow quality matches)</li>
+                <li>Drop on a specific slot row to merge (if cow quality matches and capacity allows)</li>
                 <li>Drop on the table background to move to this day (creates new slot if no match)</li>
                 <li>Green highlight = slot can accommodate</li>
-                <li>Red highlight = slot capacity exceeded</li>
+                <li>Red highlight = slot capacity exceeded or cow quality mismatch</li>
               </ul>
             </div>
           </div>

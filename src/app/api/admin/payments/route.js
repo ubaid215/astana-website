@@ -1,5 +1,3 @@
-export const dynamic = 'force-dynamic';
-
 import connectDB from '@/lib/db/mongodb';
 import Participation from '@/lib/db/models/Participation';
 import Slot from '@/lib/db/models/Slot';
@@ -80,7 +78,21 @@ export async function PATCH(req) {
       return NextResponse.json({ error: 'Participation not found' }, { status: 404 });
     }
 
-    console.log('[Admin Payments API] Before update:', { _id: participation._id, paymentStatus: participation.paymentStatus, slotId: participation.slotId });
+    console.log('[Admin Payments API] Before update:', {
+      _id: participation._id,
+      paymentStatus: participation.paymentStatus,
+      slotId: participation.slotId,
+      cowQuality: participation.cowQuality,
+    });
+
+    // Validate cowQuality before proceeding with allocation
+    if (status === 'Completed' && (!participation.cowQuality || !['Standard', 'Medium', 'Premium'].includes(participation.cowQuality))) {
+      console.error('[Admin Payments API] Invalid or missing cowQuality:', {
+        participationId,
+        cowQuality: participation.cowQuality,
+      });
+      return NextResponse.json({ error: 'Invalid or missing cowQuality in participation' }, { status: 400 });
+    }
 
     participation.paymentStatus = status;
     participation.paymentDate = new Date();
@@ -104,8 +116,9 @@ export async function PATCH(req) {
         console.error('[Admin Payments API] Slot allocation failed:', {
           participationId,
           error: slotError.message,
+          stack: slotError.stack,
         });
-        throw slotError; // Re-throw to ensure error is propagated
+        throw slotError;
       }
     } else if (status === 'Rejected' || status === 'Pending') {
       if (participation.slotId) {
@@ -129,7 +142,12 @@ export async function PATCH(req) {
     }
 
     await participation.save();
-    console.log('[Admin Payments API] After update:', { _id: participation._id, paymentStatus: participation.paymentStatus, slotId: participation.slotId });
+    console.log('[Admin Payments API] After update:', {
+      _id: participation._id,
+      paymentStatus: participation.paymentStatus,
+      slotId: participation.slotId,
+      cowQuality: participation.cowQuality,
+    });
 
     const io = getIO();
     if (io) {
@@ -158,7 +176,10 @@ export async function PATCH(req) {
     console.error('[Admin Payments API] Update payment status error:', {
       message: error.message,
       stack: error.stack,
+      participationId,
     });
     return NextResponse.json({ error: error.message || 'Server error' }, { status: 500 });
   }
 }
+
+export const dynamic = 'force-dynamic';

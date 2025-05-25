@@ -1,5 +1,6 @@
 import connectDB from '@/lib/db/mongodb';
 import Slot from '@/lib/db/models/Slot';
+import MergeHistory from '@/lib/db/models/MergeHistory';
 import { getIO } from '@/lib/socket';
 import { NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
@@ -28,7 +29,11 @@ export async function POST(req) {
       }
     } else {
       // Day drop: Find or create a slot with the same timeSlot and cowQuality
-      targetSlot = await Slot.findOne({ timeSlot: sourceSlot.timeSlot, day: destDay, cowQuality: sourceSlot.cowQuality });
+      targetSlot = await Slot.findOne({
+        timeSlot: sourceSlot.timeSlot,
+        day: destDay,
+        cowQuality: sourceSlot.cowQuality,
+      });
       if (!targetSlot) {
         targetSlot = new Slot({
           timeSlot: sourceSlot.timeSlot,
@@ -40,6 +45,7 @@ export async function POST(req) {
       }
     }
 
+    // Validate cow quality
     if (sourceSlot.cowQuality !== targetSlot.cowQuality) {
       return NextResponse.json({ error: 'Slots must have the same cow quality' }, { status: 400 });
     }
@@ -52,18 +58,29 @@ export async function POST(req) {
       return NextResponse.json({ error: 'No shares to merge' }, { status: 400 });
     }
 
+    if (availableCapacity <= 0) {
+      return NextResponse.json({ error: 'Target slot is full' }, { status: 400 });
+    }
+
     // Merge or partially allocate participants
     const updatedTargetParticipants = [...targetSlot.participants];
     const updatedSourceParticipants = [...sourceSlot.participants];
+    const movedParticipants = [];
 
     for (const sourceParticipant of sourceSlot.participants) {
       if (remainingShares <= 0 || availableCapacity <= 0) break;
+
+      // Skip participants without participationId
+      if (!sourceParticipant.participationId) {
+        console.warn('[API] Skipping participant without participationId:', sourceParticipant);
+        continue;
+      }
 
       const sharesToMove = Math.min(sourceParticipant.shares, availableCapacity);
       const participantNamesToMove = sourceParticipant.participantNames.slice(0, sharesToMove);
 
       const existingParticipantIdx = updatedTargetParticipants.findIndex(
-        p => p.participationId.toString() === sourceParticipant.participationId.toString()
+        p => p.participationId && p.participationId.toString() === sourceParticipant.participationId.toString()
       );
 
       if (existingParticipantIdx !== -1) {
@@ -87,12 +104,20 @@ export async function POST(req) {
         });
       }
 
+      movedParticipants.push({
+        participationId: sourceParticipant.participationId,
+        shares: sharesToMove,
+        participantNames: participantNamesToMove,
+        collectorName: sourceParticipant.collectorName,
+      });
+
       const sourceIdx = updatedSourceParticipants.findIndex(
-        p => p.participationId.toString() === sourceParticipant.participationId.toString()
+        p => p.participationId && p.participationId.toString() === sourceParticipant.participationId.toString()
       );
       if (sourceIdx !== -1) {
         updatedSourceParticipants[sourceIdx].shares -= sharesToMove;
-        updatedSourceParticipants[sourceIdx].participantNames = updatedSourceParticipants[sourceIdx].participantNames.slice(sharesToMove);
+        updatedSourceParticipants[sourceIdx].participantNames =
+          updatedSourceParticipants[sourceIdx].participantNames.slice(sharesToMove);
         if (updatedSourceParticipants[sourceIdx].shares <= 0) {
           updatedSourceParticipants.splice(sourceIdx, 1);
         }
@@ -113,6 +138,17 @@ export async function POST(req) {
       await Slot.findByIdAndDelete(sourceSlotId);
     }
 
+    // Log merge operation for undo
+    const mergeHistory = new MergeHistory({
+      sourceSlotId,
+      destSlotId: targetSlot._id,
+      sourceDay,
+      destDay,
+      movedParticipants,
+      createdBy: token.sub,
+    });
+    await mergeHistory.save();
+
     const io = getIO();
     if (io) {
       io.to('admin').emit('slotUpdated', targetSlot);
@@ -121,6 +157,7 @@ export async function POST(req) {
       } else {
         io.to('admin').emit('slotDeleted', { slotId: sourceSlotId });
       }
+      io.to('admin').emit('mergePerformed', { mergeId: mergeHistory._id });
     }
 
     // Return all slots to update the state
