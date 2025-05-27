@@ -26,7 +26,6 @@ export default function UserList({ initialParticipations, currentPage, totalPage
     }
   }, [socket, connected]);
 
-  // Notify user if socket remains disconnected
   useEffect(() => {
     let timeout;
     if (socket && !connected) {
@@ -63,7 +62,7 @@ export default function UserList({ initialParticipations, currentPage, totalPage
       setLocalParticipations((prev) => prev.filter((p) => p._id !== deletedId));
       toast({
         title: 'Participation Deleted',
-        description: 'A participation was deleted by an admin.',
+        description: 'Participation and associated slot data removed.',
         variant: 'info',
       });
     };
@@ -137,9 +136,7 @@ export default function UserList({ initialParticipations, currentPage, totalPage
 
       const response = await fetch(`/api/participation/${participationId}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updateData),
       });
 
@@ -150,19 +147,16 @@ export default function UserList({ initialParticipations, currentPage, totalPage
 
       const updatedParticipation = await response.json();
       
-      // Update local state
       setLocalParticipations(prev =>
         prev.map(p => p._id === participationId ? updatedParticipation : p)
       );
 
-      // Update socket state if available
       if (setParticipations) {
         setParticipations(prev =>
           prev.map(p => p._id === participationId ? updatedParticipation : p)
         );
       }
 
-      // Clear editing state
       setEditingStates(prev => ({ ...prev, [key]: false }));
       setEditValues(prev => ({ ...prev, [key]: '' }));
 
@@ -191,9 +185,7 @@ export default function UserList({ initialParticipations, currentPage, totalPage
     try {
       const response = await fetch(`/api/participation/${participationId}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ members: newMembers }),
       });
 
@@ -214,7 +206,6 @@ export default function UserList({ initialParticipations, currentPage, totalPage
         );
       }
 
-      // Start editing the new member immediately
       startEditing(participationId, 'members', '', newMembers.length - 1);
 
     } catch (error) {
@@ -236,9 +227,7 @@ export default function UserList({ initialParticipations, currentPage, totalPage
     try {
       const response = await fetch(`/api/participation/${participationId}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ members: newMembers }),
       });
 
@@ -300,9 +289,7 @@ export default function UserList({ initialParticipations, currentPage, totalPage
     try {
       const response = await fetch(`/api/participation/${id}`, {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
       });
 
       if (!response.ok) {
@@ -313,7 +300,7 @@ export default function UserList({ initialParticipations, currentPage, totalPage
       setLocalParticipations((prev) => prev.filter((p) => p._id !== id));
       toast({
         title: 'Success',
-        description: 'Participation deleted successfully',
+        description: 'Participation and associated slot data deleted successfully',
         variant: 'success',
       });
     } catch (error) {
@@ -353,9 +340,7 @@ export default function UserList({ initialParticipations, currentPage, totalPage
     try {
       const response = await fetch('/api/participation', {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
       });
 
       if (!response.ok) {
@@ -545,7 +530,7 @@ export default function UserList({ initialParticipations, currentPage, totalPage
                       ) : (
                         <span className="text-sm text-gray-500">No members</span>
                       )}
-                      {/* {session?.user?.isAdmin && (
+                      {session?.user?.isAdmin && (
                         <Button
                           size="sm"
                           onClick={() => addMember(p._id)}
@@ -554,7 +539,7 @@ export default function UserList({ initialParticipations, currentPage, totalPage
                           <Plus className="h-3 w-3" />
                           Add Member
                         </Button>
-                      )} */}
+                      )}
                     </div>
                   </TableCell>
                   <TableCell className="py-4">{p.cowQuality}</TableCell>

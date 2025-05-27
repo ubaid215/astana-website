@@ -18,15 +18,25 @@ const SlotSchema = new mongoose.Schema({
   cowQuality: { type: String, enum: ['Standard', 'Medium', 'Premium'], required: true },
   participants: [
     {
-      participationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Participation' },
+      participationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Participation', required: true },
       collectorName: { type: String, required: true },
-      participantNames: [{ type: String }], // Use participantNames as per requirements
-      shares: { type: Number, required: true },
+      participantNames: [{ type: String }],
+      shares: { type: Number, required: true, min: 1 },
     },
   ],
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now },
-});
+  completed: { type: Boolean, default: false },
+  mergeMetadata: [
+    {
+      participationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Participation' },
+      shares: { type: Number, required: true, min: 1 },
+      participantNames: [{ type: String }],
+      collectorName: { type: String, required: true },
+      originalTimeSlot: { type: String, required: true },
+      originalDay: { type: Number, enum: [1, 2], required: true },
+      sourceSlotId: { type: mongoose.Schema.Types.ObjectId, required: true },
+    },
+  ],
+}, { timestamps: true });
 
 // Update updatedAt on save
 SlotSchema.pre('save', function (next) {

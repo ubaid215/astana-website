@@ -43,7 +43,8 @@ export async function POST(req) {
     // Filter available slots that match our cow quality
     const availableSlots = availability
       .filter(slot => slot.available)
-      .map(slot => slot.timeSlot);
+      .map(slot => slot.timeSlot)
+      .sort(); // Sort by time for earliest slot first
 
     // Calculate total available capacity
     const totalAvailableCapacity = availability

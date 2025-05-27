@@ -169,27 +169,60 @@ export async function DELETE(req, context) {
       return NextResponse.json({ error: 'Participation not found' }, { status: 404 });
     }
 
+    // Handle slot cleanup
     if (participation.slotId) {
-      await Slot.updateOne(
-        { _id: participation.slotId },
-        { $pull: { participants: { participationId: id } } }
-      );
+      const slot = await Slot.findById(participation.slotId);
+      if (slot) {
+        // Remove the participation from the slot's participants
+        const participantIndex = slot.participants.findIndex(p => p.participationId.toString() === id);
+        if (participantIndex !== -1) {
+          slot.participants.splice(participantIndex, 1);
 
-      try {
-        const updatedSlot = await Slot.findById(participation.slotId);
-        if (updatedSlot) {
-          const emitted = emitSocketEvent('slotUpdated', updatedSlot);
-          console.log('[API] slotUpdated event emission:', emitted ? 'Success' : 'Failed');
+          // If no participants remain, delete the slot
+          if (slot.participants.length === 0) {
+            await Slot.findByIdAndDelete(participation.slotId);
+            console.log('[API] Deleted empty slot:', participation.slotId);
+            try {
+              const emitted = emitSocketEvent('slotDeleted', { slotId: participation.slotId });
+              if (emitted) {
+                console.log('[API] Successfully emitted slotDeleted for:', participation.slotId);
+              } else {
+                const io = getIO();
+                if (io) {
+                  io.to('admin').emit('slotDeleted', { slotId: participation.slotId });
+                  console.log('[API] Emitted slotDeleted via direct call for:', participation.slotId);
+                }
+              }
+            } catch (slotError) {
+              console.warn('[API] Failed to emit slotDeleted:', slotError.message);
+            }
+          } else {
+            // Save the updated slot if participants remain
+            await slot.save();
+            try {
+              const emitted = emitSocketEvent('slotUpdated', slot);
+              if (emitted) {
+                console.log('[API] Successfully emitted slotUpdated for:', slot._id);
+              } else {
+                const io = getIO();
+                if (io) {
+                  io.to('admin').emit('slotUpdated', slot);
+                  console.log('[API] Emitted slotUpdated via direct call for:', slot._id);
+                }
+              }
+            } catch (slotError) {
+              console.warn('[API] Failed to emit slotUpdated:', slotError.message);
+            }
+          }
         }
-      } catch (slotError) {
-        console.warn('[API] Failed to emit slotUpdated:', slotError.message);
       }
     }
 
+    // Delete the participation
     await Participation.deleteOne({ _id: id });
 
+    // Emit participation deleted event
     const emitted = emitSocketEvent('participationDeleted', id, ['admin', 'public']);
-    
     if (emitted) {
       console.log('[API] Successfully emitted participationDeleted for:', id);
     } else {
@@ -197,6 +230,7 @@ export async function DELETE(req, context) {
         const io = getIO();
         if (io) {
           io.to('admin').emit('participationDeleted', id);
+          io.to('public').emit('participationDeleted', id);
           console.log('[API] Emitted participationDeleted via direct call for:', id);
         } else {
           console.warn('[API] Socket.io not initialized, skipping participationDeleted emission');

@@ -19,7 +19,7 @@ export async function allocateSlot(participation) {
   let remainingShares = participation.shares;
   let remainingParticipants = [...(participation.members || [])];
   const { day, cowQuality, collectorName, _id } = participation;
-  let preferredTimeSlot = participation.timeSlot || TIME_SLOTS[day][0]; // Fallback to first time slot if none preferred
+  let preferredTimeSlot = participation.timeSlot || TIME_SLOTS[day][0]; // Fallback to first time slot
 
   console.log('[allocateSlot] Starting allocation', {
     participationId: _id,
@@ -89,10 +89,11 @@ export async function allocateSlot(participation) {
     throw new Error(availability.message);
   }
 
-  // Sort available slots by time slot, prioritizing the preferred time slot if specified
+  // Sort available slots by time and cow quality (earliest time for matching cow quality)
   let sortedAvailableSlots = availability.availableSlots.sort((a, b) => {
-    if (a.timeSlot === preferredTimeSlot) return -1;
-    if (b.timeSlot === preferredTimeSlot) return 1;
+    // Prioritize slots with matching cowQuality and earlier time
+    if (a.timeSlot === preferredTimeSlot && b.timeSlot !== preferredTimeSlot) return -1;
+    if (b.timeSlot === preferredTimeSlot && a.timeSlot !== preferredTimeSlot) return 1;
     return a.timeSlot.localeCompare(b.timeSlot);
   });
 

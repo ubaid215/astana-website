@@ -1,4 +1,3 @@
-// In your API route (e.g., /api/participation/update-name/route.js)
 import connectDB from '@/lib/db/mongodb';
 import Participation from '@/lib/db/models/Participation';
 import Slot from '@/lib/db/models/Slot';
@@ -17,12 +16,15 @@ export async function PATCH(req) {
 
     // Validate input
     if (!participationId || !participationId.match(/^[0-9a-fA-F]{24}$/)) {
+      console.log('[API] Invalid participation ID:', participationId);
       return NextResponse.json({ error: 'Invalid participation ID' }, { status: 400 });
     }
     if (typeof index !== 'number' || index < 0) {
+      console.log('[API] Invalid index:', index);
       return NextResponse.json({ error: 'Invalid index' }, { status: 400 });
     }
     if (typeof newName !== 'string' || newName.trim() === '') {
+      console.log('[API] Invalid newName:', newName);
       return NextResponse.json({ error: 'Participant name cannot be empty' }, { status: 400 });
     }
 
@@ -31,14 +33,24 @@ export async function PATCH(req) {
     // Update the Participation document
     const participation = await Participation.findById(participationId);
     if (!participation) {
+      console.log('[API] Participation not found for ID:', participationId);
       return NextResponse.json({ error: 'Participation not found' }, { status: 404 });
     }
 
-    if (index >= participation.participantNames.length) {
+    console.log('[API] Participation document:', participation);
+
+    // Check if members is an array
+    if (!Array.isArray(participation.members)) {
+      console.error('[API] members is not an array:', participation.members);
+      return NextResponse.json({ error: 'Invalid members data' }, { status: 400 });
+    }
+
+    if (index >= participation.members.length) {
+      console.log('[API] Invalid participant index:', { index, membersLength: participation.members.length });
       return NextResponse.json({ error: 'Invalid participant index' }, { status: 400 });
     }
 
-    participation.participantNames[index] = newName.trim();
+    participation.members[index] = newName.trim();
     await participation.save();
 
     // Update the corresponding Slot document
@@ -54,20 +66,28 @@ export async function PATCH(req) {
       }
     }
 
-    // Emit socket event
+    // Emit socket event with string IDs
     const io = getIO();
     if (io) {
       io.to('admin').emit('participantNameUpdated', {
-        slotId: participation.slotId,
-        participationId,
+        slotId: participation.slotId.toString(),
+        participationId: participationId.toString(),
         index,
         newName: newName.trim()
       });
+      console.log('[API] Emitted participantNameUpdated event:', {
+        slotId: participation.slotId.toString(),
+        participationId: participationId.toString(),
+        index,
+        newName: newName.trim()
+      });
+    } else {
+      console.warn('[API] Socket.IO instance not available');
     }
 
     return NextResponse.json({ message: 'Name updated successfully' }, { status: 200 });
   } catch (error) {
-    console.error('Error updating participant name:', error);
+    console.error('[API] Error updating participant name:', error);
     return NextResponse.json({ error: error.message || 'Server error' }, { status: 500 });
   }
 }

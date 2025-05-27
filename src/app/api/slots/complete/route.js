@@ -1,5 +1,6 @@
 import connectDB from '@/lib/db/mongodb';
 import Slot from '@/lib/db/models/Slot';
+import User from '@/lib/db/models/User';
 import Participation from '@/lib/db/models/Participation';
 import { NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
@@ -7,63 +8,113 @@ import { getIO } from '@/lib/socket';
 
 export async function PATCH(req) {
   try {
+    console.log('[Slots/Complete] Received PATCH request at', new Date().toISOString());
+
+    // Authenticate admin user
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-    if (!token || !token.id) {
+    if (!token?.sub || !token?.isAdmin) {
+      console.warn('[Slots/Complete] Unauthorized access attempt');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Verify admin role
-    if (!token.isAdmin) {
-      return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
-    }
-
+    // Parse request body
     const { slotId, completed } = await req.json();
     if (!slotId || typeof completed !== 'boolean') {
+      console.error('[Slots/Complete] Invalid input:', { slotId, completed });
       return NextResponse.json({ error: 'Invalid input' }, { status: 400 });
     }
 
     await connectDB();
-    console.log('[Slots/Complete] Attempting to update slot:', { slotId, completed });
+    console.log('[Slots/Complete] MongoDB connected');
 
-    const slot = await Slot.findByIdAndUpdate(
-      slotId,
-      { completed },
-      { new: true }
-    );
-
+    // Find the slot with participants
+    const slot = await Slot.findById(slotId);
     if (!slot) {
       console.error('[Slots/Complete] Slot not found:', slotId);
       return NextResponse.json({ error: 'Slot not found' }, { status: 404 });
     }
 
-    console.log('[Slots/Complete] Slot updated successfully:', { slotId, completed: slot.completed });
+    // Only process if the completion status is changing
+    // In your PATCH handler, modify the completion logic:
+    if (completed && !slot.completed) {
+      console.log('[Slots/Complete] Processing completion for slot:', slotId);
 
-    // Find participations linked to this slot
-    const participations = await Participation.find({ slotId }).select('userId collectorName');
-    
-    // Get collector names from the slot's participants
-    const slotCollectorNames = slot.participants.map(p => p.collectorName);
+      // Get all participations for this slot
+      const participations = await Participation.find({ slotId: slot._id });
 
-    // Find user IDs where the collectorName matches
-    const userIdsToNotify = participations
-      .filter(p => slotCollectorNames.includes(p.collectorName))
-      .map(p => p.userId.toString());
+      // Create completion entry
+      const completionEntry = {
+        slotId: slot._id,
+        day: slot.day,
+        timeSlot: slot.timeSlot,
+        cowQuality: slot.cowQuality,
+        message: 'Your Qurbani has been completed successfully!',
+        completedAt: new Date(),
+      };
 
-    console.log('[Slots/Complete] Notifying users:', { userIds: userIdsToNotify, slotCollectorNames });
+      // Update each participating user
+      for (const participation of participations) {
+        const user = await User.findById(participation.userId);
+        if (!user) continue;
 
-    // Emit Socket.IO event to notify users and admins
+        // Initialize if not exists
+        if (!user.qurbaniCompletions) {
+          user.qurbaniCompletions = [];
+        }
+
+        // Check for existing completion
+        const hasCompletion = user.qurbaniCompletions.some(
+          c => c.slotId.toString() === slotId.toString()
+        );
+
+        if (!hasCompletion) {
+          // Add collector/participant info specific to this user
+          const userCompletion = {
+            ...completionEntry,
+            collectorName: participation.collectorName,
+            participantNames: participation.members || [],
+          };
+
+          user.qurbaniCompletions.push(userCompletion);
+          await user.save();
+
+          // Emit socket event
+          const io = getIO();
+          io.to(user._id.toString()).emit('qurbaniCompleted', {
+            userId: user._id.toString(),
+            completion: userCompletion,
+          });
+        }
+      }
+    }
+
+    // Update slot completion status
+    const updatedSlot = await Slot.findByIdAndUpdate(
+      slotId,
+      { completed },
+      { new: true }
+    );
+
+    // Emit event to admin dashboard
     const io = getIO();
-    userIdsToNotify.forEach((userId) => {
-      io.to(userId).emit('slotCompleted', { slotId, completed, userId });
+    io.to('admin').emit('slotCompleted', {
+      slotId: updatedSlot._id,
+      completed: updatedSlot.completed,
+      day: updatedSlot.day
     });
-    io.to('admin').emit('slotCompleted', { slotId, completed, day: slot.day });
 
-    return NextResponse.json({ message: 'Slot completion updated', slot }, { status: 200 });
+    return NextResponse.json({
+      message: 'Slot completion updated successfully',
+      slot: updatedSlot
+    }, { status: 200 });
+
   } catch (error) {
-    console.error('Slot completion error:', {
+    console.error('[Slots/Complete] Error:', {
       message: error.message,
       stack: error.stack,
     });
-    return NextResponse.json({ error: error.message || 'Server error' }, { status: 500 });
+    return NextResponse.json({
+      error: error.message || 'Server error'
+    }, { status: 500 });
   }
 }
