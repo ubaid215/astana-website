@@ -32,7 +32,7 @@ export async function POST(req) {
         return NextResponse.json({ error: 'Slots must have the same cow quality' }, { status: 400 });
       }
     } else {
-      // Dropping onto a day — find or create unique time slot across cow qualities
+      // Day drop: Find or create a new slot ensuring unique time slot across all cow qualities
       const allSlotsForDay = await Slot.find({ day: destDay });
       const occupiedTimeSlots = new Set(allSlotsForDay.map(slot => slot.timeSlot));
       const availableTimeSlots = (TIME_SLOTS[destDay] || []).filter(time => !occupiedTimeSlots.has(time));
