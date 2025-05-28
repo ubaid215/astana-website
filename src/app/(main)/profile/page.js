@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select';
@@ -10,6 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useSocket } from '@/hooks/useSocket';
 import { useToast } from '@/components/ui/use-toast';
 import { FaCopy } from 'react-icons/fa';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/Dialog';
+import { format } from 'date-fns';
 
 export default function ProfilePage() {
   const { data: session, status } = useSession();
@@ -21,13 +24,26 @@ export default function ProfilePage() {
   const [paymentForm, setPaymentForm] = useState({
     participationId: '',
     transactionId: '',
-    screenshot: null,
+    screenshots: [],
+    installmentNumber: '1', // Added for installment/half-payment
   });
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
   const [qurbaniCompletions, setQurbaniCompletions] = useState([]);
 
-  // Function to refresh profile data
+  const getScreenshotUrl = (screenshot) => {
+    if (!screenshot) return null;
+    // If the screenshot is already an absolute URL, return it
+    if (screenshot.startsWith('http://') || screenshot.startsWith('https://')) {
+      return screenshot;
+    }
+    // Use relative path for local uploads
+    const cleanPath = screenshot.replace(/^\/*(uploads\/)?/, '');
+    const url = `/uploads/${cleanPath}`;
+    console.log('[ProfilePage] Generated screenshot URL:', url);
+    return url;
+  };
+
   const refreshProfileData = async () => {
     try {
       console.log('[ProfilePage] Refreshing profile data...');
@@ -41,8 +57,7 @@ export default function ProfilePage() {
         const completionsData = Array.isArray(data.qurbaniCompletions) ? data.qurbaniCompletions : [];
         console.log('[ProfilePage] Updated qurbani completions:', completionsData);
         setQurbaniCompletions(completionsData);
-        
-        // Show toast if new completions were added
+
         if (completionsData.length > qurbaniCompletions.length) {
           toast({
             title: 'Profile Updated',
@@ -56,7 +71,6 @@ export default function ProfilePage() {
       }
     } catch (err) {
       console.error('[ProfilePage] Refresh error:', err);
-      // Don't set error state for refresh failures to avoid disrupting UX
     }
   };
 
@@ -105,32 +119,22 @@ export default function ProfilePage() {
 
     const handleQurbaniCompleted = ({ userId, completion }) => {
       console.log('[ProfilePage] Qurbani completed event received:', { userId, completion, sessionUserId: session?.user?.id });
-      
       if (session?.user?.id === userId) {
         console.log('[ProfilePage] User ID matched, refreshing profile data');
-        // Refresh entire profile data to ensure consistency
         refreshProfileData();
-        
         toast({
           title: 'Qurbani Completed! 🎉',
           description: completion.message || 'Your Qurbani has been completed successfully!',
           variant: 'success',
-        });
-      } else {
-        console.log('[ProfilePage] User ID did not match:', { 
-          sessionUserId: session?.user?.id, 
-          eventUserId: userId 
         });
       }
     };
 
     const handleSlotCompleted = ({ slotId, completed, day }) => {
       console.log('[ProfilePage] Slot completed event received:', { slotId, completed, day });
-      // Refresh profile data when any slot is completed to update participation status
       refreshProfileData();
     };
 
-    // Listen for both events
     socket.on('qurbaniCompleted', handleQurbaniCompleted);
     socket.on('slotCompleted', handleSlotCompleted);
 
@@ -139,38 +143,39 @@ export default function ProfilePage() {
       socket.off('slotCompleted', handleSlotCompleted);
       console.log('[ProfilePage] Cleaned up socket event listeners');
     };
-  }, [socket, connected, session, toast, qurbaniCompletions.length]);
+  }, [socket, connected, session, toast, qurbaniCompletions.length, refreshProfileData]);
 
-  // Add periodic refresh to ensure data consistency
   useEffect(() => {
     if (status !== 'authenticated') return;
 
     const intervalId = setInterval(() => {
       console.log('[ProfilePage] Periodic profile refresh');
       refreshProfileData();
-    }, 30000); // Refresh every 30 seconds
+    }, 30000);
 
     return () => clearInterval(intervalId);
-  }, [status]);
+  }, [status, refreshProfileData]);
 
   const handlePaymentSubmit = async (e) => {
     e.preventDefault();
-    if (!paymentForm.participationId || !paymentForm.transactionId) {
-      setFormError('Please select a participation and provide a transaction ID');
+    if (!paymentForm.participationId || !paymentForm.transactionId || paymentForm.screenshots.length === 0) {
+      setFormError('Please select a participation, provide a transaction ID, and upload at least one screenshot');
       return;
     }
 
     const formData = new FormData();
     formData.append('participationId', paymentForm.participationId);
     formData.append('transactionId', paymentForm.transactionId);
-    if (paymentForm.screenshot) {
-      formData.append('screenshot', paymentForm.screenshot);
-    }
+    formData.append('installmentNumber', paymentForm.installmentNumber); // Added for installment
+    paymentForm.screenshots.forEach((screenshot, index) => {
+      formData.append('screenshot', screenshot);
+    });
 
     console.log('[ProfilePage] Sending FormData:', {
       participationId: paymentForm.participationId,
       transactionId: paymentForm.transactionId,
-      screenshot: paymentForm.screenshot ? paymentForm.screenshot.name : null,
+      installmentNumber: paymentForm.installmentNumber,
+      screenshots: paymentForm.screenshots.map(s => s.name),
     });
 
     try {
@@ -182,8 +187,8 @@ export default function ProfilePage() {
       if (res.ok) {
         setFormError('');
         setFormSuccess(`Payment submitted successfully for Participation ID: ${paymentForm.participationId}. Awaiting admin confirmation.`);
-        setPaymentForm({ participationId: '', transactionId: '', screenshot: null });
-        // Refresh profile data after payment submission
+        setPaymentForm({ participationId: '', transactionId: '', screenshots: [], installmentNumber: '1' });
+        document.getElementById('screenshot').value = ''; // Reset file input
         refreshProfileData();
       } else {
         console.error('[ProfilePage] Payment submission error:', data.error);
@@ -216,16 +221,16 @@ export default function ProfilePage() {
     <div className="min-h-screen bg-background p-6">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-primary">User Profile</h1>
-        <Button 
-          onClick={refreshProfileData} 
-          variant="outline" 
+        <Button
+          onClick={refreshProfileData}
+          variant="outline"
           size="sm"
           className="bg-blue-50 hover:bg-blue-100"
         >
           🔄 Refresh
         </Button>
       </div>
-      
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -239,7 +244,10 @@ export default function ProfilePage() {
             ) : (
               <div className="space-y-4">
                 {qurbaniCompletions.map((completion, index) => (
-                  <div key={`${completion.slotId}-${index}`} className="bg-green-50 border border-green-200 rounded-lg p-4 shadow-sm">
+                  <div
+                    key={`${completion.slotId}-${index}`}
+                    className="bg-green-50 border border-green-200 rounded-lg p-4 shadow-sm"
+                  >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <h3 className="text-lg font-semibold text-green-800 flex items-center">
@@ -254,6 +262,12 @@ export default function ProfilePage() {
                           </p>
                         )}
                         <p className="text-sm text-gray-600">
+                          <strong>Slot:</strong> Day {completion.day}, {completion.timeSlot}
+                        </p>
+                        <p className="text-sm text-gray-600">
+                          <strong>Cow Quality:</strong> {completion.cowQuality}
+                        </p>
+                        <p className="text-sm text-gray-600">
                           <strong>Completed on:</strong> {new Date(completion.completedAt).toLocaleDateString()}
                         </p>
                       </div>
@@ -264,7 +278,7 @@ export default function ProfilePage() {
               </div>
             )}
           </div>
-          
+
           <div className="bg-white rounded-lg shadow-md p-6">
             <h2 className="text-xl font-semibold text-secondary mb-4">Participations</h2>
             <div className="overflow-x-auto">
@@ -275,7 +289,6 @@ export default function ProfilePage() {
                     <TableHead>Collector Name</TableHead>
                     <TableHead>Members</TableHead>
                     <TableHead>Cow Quality</TableHead>
-                    
                     <TableHead>Shares</TableHead>
                     <TableHead>Total Amount</TableHead>
                     <TableHead>Payment Status</TableHead>
@@ -310,7 +323,6 @@ export default function ProfilePage() {
                               {p.cowQuality}
                             </span>
                           </TableCell>
-                          
                           <TableCell>
                             <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
                               {p.shares}
@@ -320,35 +332,35 @@ export default function ProfilePage() {
                             {p.totalAmount.toLocaleString()} PKR
                           </TableCell>
                           <TableCell>
-                            <span className={`px-2 py-1 rounded-full text-sm ${
-                              p.paymentStatus === 'confirmed' 
-                                ? 'bg-green-100 text-green-800' 
-                                : p.paymentStatus === 'pending'
-                                ? 'bg-yellow-100 text-yellow-800'
-                                : 'bg-gray-100 text-gray-800'
-                            }`}>
+                            <span
+                              className={`px-2 py-1 rounded-full text-sm ${p.paymentStatus === 'Completed'
+                                  ? 'bg-green-100 text-green-800'
+                                  : p.paymentStatus === 'Pending'
+                                    ? 'bg-yellow-100 text-yellow-800'
+                                    : 'bg-gray-100 text-gray-800'
+                                }`}
+                            >
                               {p.paymentStatus}
                             </span>
                           </TableCell>
                           <TableCell>
-                            <div className="flex items-center space-x-2">
-                              <span className={`px-2 py-1 rounded-full text-sm ${
-                                isCompleted
+                            <span
+                              className={`px-2 py-1 rounded-full text-sm ${isCompleted
                                   ? 'bg-green-100 text-green-800'
-                                  : p.slotAssigned 
-                                  ? 'bg-blue-100 text-blue-800' 
-                                  : 'bg-gray-100 text-gray-800'
-                              }`}>
-                                {isCompleted ? '✅ Completed' : p.slotAssigned ? 'Assigned' : 'Not Assigned'}
-                              </span>
-                            </div>
+                                  : p.slotAssigned
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : 'bg-gray-100 text-gray-800'
+                                }`}
+                            >
+                              {isCompleted ? '✅ Completed' : p.slotAssigned ? 'Assigned' : 'Not Assigned'}
+                            </span>
                           </TableCell>
                         </TableRow>
                       );
                     })
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-center py-8">
+                      <TableCell colSpan={8} className="text-center py-8">
                         <div className="text-gray-500">
                           <div className="text-4xl mb-2">📝</div>
                           <p>No participations yet</p>
@@ -361,7 +373,7 @@ export default function ProfilePage() {
               </Table>
             </div>
           </div>
-          
+
           <div className="bg-white rounded-lg shadow-md p-6 mt-6">
             <h2 className="text-xl font-semibold text-secondary mb-4">Submit Payment</h2>
             <p className="text-gray-600 mb-4">
@@ -421,14 +433,35 @@ export default function ProfilePage() {
                 />
               </div>
               <div>
+                <label htmlFor="installmentNumber" className="block text-sm font-medium mb-2">
+                  Installment Number
+                </label>
+                <Select
+                  value={paymentForm.installmentNumber}
+                  onValueChange={(value) => setPaymentForm({ ...paymentForm, installmentNumber: value })}
+                  required
+                >
+                  <SelectTrigger id="installmentNumber">
+                    <SelectValue placeholder="Select Installment" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">Installment 1</SelectItem>
+                    <SelectItem value="2">Installment 2</SelectItem>
+                    <SelectItem value="3">Installment 3</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
                 <label htmlFor="screenshot" className="block text-sm font-medium mb-2">
-                  Screenshot of payment (optional)
+                  Screenshots of payment
                 </label>
                 <Input
                   id="screenshot"
                   type="file"
-                  accept="image/jpeg,image/png,image/jpg"
-                  onChange={(e) => setPaymentForm({ ...paymentForm, screenshot: e.target.files[0] })}
+                  accept="image/jpeg,image/png,image/jpg,image/webp"
+                  multiple
+                  onChange={(e) => setPaymentForm({ ...paymentForm, screenshots: Array.from(e.target.files) })}
+                  required
                 />
               </div>
               <Button type="submit" className="bg-primary text-white w-full">
@@ -437,7 +470,7 @@ export default function ProfilePage() {
             </form>
           </div>
         </div>
-        
+
         <div className="space-y-6">
           <div className="bg-white rounded-lg shadow-md p-6">
             <h2 className="text-xl font-semibold text-secondary mb-4">Payments</h2>
@@ -448,8 +481,7 @@ export default function ProfilePage() {
                     <TableHead>Participation ID</TableHead>
                     <TableHead>Amount</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Transaction ID</TableHead>
-                    <TableHead>Screenshot</TableHead>
+                    <TableHead>Proofs</TableHead>
                     <TableHead>Date</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -460,39 +492,78 @@ export default function ProfilePage() {
                         <TableCell className="font-mono text-sm">{p._id}</TableCell>
                         <TableCell className="font-semibold">{p.totalAmount.toLocaleString()} PKR</TableCell>
                         <TableCell>
-                          <span className={`px-2 py-1 rounded-full text-xs ${
-                            p.paymentStatus === 'confirmed' 
-                              ? 'bg-green-100 text-green-800' 
-                              : p.paymentStatus === 'pending'
-                              ? 'bg-yellow-100 text-yellow-800'
-                              : 'bg-gray-100 text-gray-800'
-                          }`}>
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs ${p.paymentStatus === 'Completed'
+                                ? 'bg-green-100 text-green-800'
+                                : p.paymentStatus === 'Pending'
+                                  ? 'bg-yellow-100 text-yellow-800'
+                                  : 'bg-gray-100 text-gray-800'
+                              }`}
+                          >
                             {p.paymentStatus}
                           </span>
                         </TableCell>
-                        <TableCell>{p.transactionId || 'N/A'}</TableCell>
                         <TableCell>
-                          {p.screenshot ? (
-                            <a 
-                              href={p.screenshot} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="text-blue-600 hover:underline"
-                            >
-                              View
-                            </a>
+                          {p.paymentSubmissions?.length > 0 ? (
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button variant="link" className="text-blue-600 hover:underline">
+                                  View ({p.paymentSubmissions.reduce((sum, sub) => sum + (sub.screenshots?.length || 0), 0)})
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent>
+                                <DialogHeader>
+                                  <DialogTitle>Payment Proofs for Participation {p._id}</DialogTitle>
+                                </DialogHeader>
+                                <div className="space-y-4">
+                                  {p.paymentSubmissions.map((submission, subIndex) =>
+                                    submission.screenshots?.map((screenshot, index) => {
+                                      const screenshotUrl = getScreenshotUrl(screenshot);
+                                      return (
+                                        <div key={`${subIndex}-${index}`} className="border-b pb-4 last:border-b-0">
+                                          <p className="text-sm font-medium">
+                                            Proof {index + 1} (Installment {submission.installmentNumber || 1}) - Transaction ID: {submission.transactionId}
+                                          </p>
+                                          <p className="text-sm text-gray-600">
+                                            Submitted on: {format(new Date(submission.submittedAt), 'PPpp')}
+                                          </p>
+                                          {screenshotUrl ? (
+                                            <a
+                                              href={screenshotUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="inline-block mt-2"
+                                            >
+                                              <Image
+                                                src={screenshotUrl}
+                                                alt={`Payment proof ${index + 1}`}
+                                                width={300}
+                                                height={200}
+                                                className="max-w-full h-auto max-h-64 rounded"
+                                              />
+                                            </a>
+                                          ) : (
+                                            <span className="text-gray-500">No screenshot available</span>
+                                          )}
+                                        </div>
+                                      );
+                                    })
+                                  )}
+                                </div>
+                              </DialogContent>
+                            </Dialog>
                           ) : (
-                            'N/A'
+                            <span className="text-gray-500">N/A</span>
                           )}
                         </TableCell>
                         <TableCell>
-                          {p.paymentDate ? new Date(p.paymentDate).toLocaleDateString() : 'N/A'}
+                          {p.paymentDate ? format(new Date(p.paymentDate), 'PP') : 'N/A'}
                         </TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-6">
+                      <TableCell colSpan={5} className="text-center py-6">
                         <div className="text-gray-500">
                           <div className="text-3xl mb-2">💳</div>
                           <p>No payments yet</p>
@@ -504,7 +575,7 @@ export default function ProfilePage() {
               </Table>
             </div>
           </div>
-          
+
           <div className="bg-white rounded-lg shadow-md p-6">
             <h2 className="text-xl font-semibold text-secondary mb-4">Payment Account Details</h2>
             <div className="space-y-4">
@@ -516,7 +587,7 @@ export default function ProfilePage() {
                 <p className="text-sm font-medium mt-2">IBAN Number:</p>
                 <p className="font-mono text-sm bg-white p-2 rounded border">PK40MEZN0004170110884115</p>
               </div>
-              
+
               <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
                 <h4 className="text-lg font-semibold text-primary mb-2">🌍 Western Union</h4>
                 <div className="space-y-2 text-sm">
@@ -528,7 +599,7 @@ export default function ProfilePage() {
               </div>
             </div>
           </div>
-          
+
           <div className="bg-white rounded-lg shadow-md p-6">
             <h2 className="text-xl font-semibold text-secondary mb-4">Account Details</h2>
             <div className="space-y-2">
