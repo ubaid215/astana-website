@@ -50,7 +50,10 @@ export default function SlotTable({ initialSlots, day }) {
       });
       if (!response.ok) throw new Error('Failed to fetch available time slots');
       const data = await response.json();
-      setAvailableTimeSlots(data.availableSlots);
+      setAvailableTimeSlots(data.availableSlots.map(slot => ({
+        timeSlot: slot.timeSlot,
+        capacity: slot.capacity,
+      })));
     } catch (error) {
       console.error('[SlotTable] Error fetching available time slots:', error);
       setTimeSlotError('Failed to load available time slots');
@@ -351,38 +354,27 @@ export default function SlotTable({ initialSlots, day }) {
   );
 
   const handleUndoMerge = useCallback(async (slotId) => {
-    try {
-      if (!isAdmin) throw new Error('Admin access required');
-      const response = await fetch('/api/slots/undo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slotId }),
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to undo merge');
-      }
-      const updatedSlots = await response.json();
-      setSlots(updatedSlots);
-      const checkResponse = await fetch('/api/slots/undo-available', {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (checkResponse.ok) {
-        const data = await checkResponse.json();
-        setCanUndo(data.canUndo);
-        setUndoChecked(true);
-        setUndoError(null);
-      } else {
-        setCanUndo(false);
-        setUndoChecked(true);
-        setUndoError('Failed to check undo availability');
-      }
-      toast({ title: 'Success', description: 'Merge undone', variant: 'success' });
-    } catch (error) {
-      toast({ title: 'Error', description: `Failed to undo merge: ${error.message}`, variant: 'destructive' });
+  try {
+    if (!isAdmin) throw new Error('Admin access required');
+    const response = await fetch('/api/slots/undo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slotId }),
+    });
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to undo merge');
     }
-  }, [toast, isAdmin, setSlots]);
+    const updatedSlots = await response.json();
+    setSlots(updatedSlots);
+    setCanUndo(false); // Reset undo flag after successful undo
+    setUndoChecked(true);
+    setUndoError(null);
+    toast({ title: 'Success', description: 'Merge undone', variant: 'success' });
+  } catch (error) {
+    toast({ title: 'Error', description: `Failed to undo merge: ${error.message}`, variant: 'destructive' });
+  }
+}, [toast, isAdmin, setSlots]);
 
   const canSlotAccommodate = (targetSlot, draggedSlot) => {
     if (!targetSlot || !draggedSlot) return false;
@@ -599,11 +591,10 @@ export default function SlotTable({ initialSlots, day }) {
         </div>
 
         <div
-          className={`overflow-x-auto transition-all duration-200 p-4 rounded-lg border ${
-            dragOverTarget === `day-${day}`
+          className={`overflow-x-auto transition-all duration-200 p-4 rounded-lg border ${dragOverTarget === `day-${day}`
               ? 'bg-blue-50 border-2 border-blue-300 border-dashed shadow-inner'
               : 'border-gray-200'
-          }`}
+            }`}
           onDragOver={handleDragOver}
           onDragEnter={handleDayDragEnter}
           onDragLeave={handleDragLeave}
@@ -672,9 +663,9 @@ export default function SlotTable({ initialSlots, day }) {
                                   <SelectValue placeholder="Select time slot" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {availableTimeSlots.map((time) => (
-                                    <SelectItem key={time} value={time} className="text-sm">
-                                      {time}
+                                  {availableTimeSlots.map((slot) => (
+                                    <SelectItem key={slot.timeSlot} value={slot.timeSlot} className="text-sm">
+                                      {slot.timeSlot} (Capacity: {slot.capacity})
                                     </SelectItem>
                                   ))}
                                 </SelectContent>
@@ -705,7 +696,7 @@ export default function SlotTable({ initialSlots, day }) {
                           </div>
                         ) : (
                           <div className="flex items-center space-x-2 group">
-                            <span>{slot.timeSlot}</span>
+                            <span>{slot.timeSlot} (Capacity: {7 - slot.participants.reduce((sum, p) => sum + p.shares, 0)})</span>
                             {isAdmin && (
                               <Button
                                 size="sm"
@@ -853,8 +844,8 @@ export default function SlotTable({ initialSlots, day }) {
                 <TableRow>
                   <TableCell colSpan={isAdmin ? 8 : 5} className="text-center py-12">
                     <div className={`transition-all duration-200 ${dragOverTarget === `day-${day}`
-                        ? 'text-blue-600 font-medium text-lg animate-pulse'
-                        : 'text-gray-500'
+                      ? 'text-blue-600 font-medium text-lg animate-pulse'
+                      : 'text-gray-500'
                       }`}>
                       {dragOverTarget === `day-${day}`
                         ? '📥 Drop slot here to add to this day'

@@ -508,7 +508,7 @@ export default function ProfilePage() {
                             <Dialog>
                               <DialogTrigger asChild>
                                 <Button variant="link" className="text-blue-600 hover:underline">
-                                  View ({p.paymentSubmissions.reduce((sum, sub) => sum + (sub.screenshots?.length || 0), 0)})
+                                  View ({p.paymentSubmissions.reduce((sum, sub) => sum + (sub.allScreenshots?.length || 0), 0)})
                                 </Button>
                               </DialogTrigger>
                               <DialogContent>
@@ -517,7 +517,7 @@ export default function ProfilePage() {
                                 </DialogHeader>
                                 <div className="space-y-4">
                                   {p.paymentSubmissions.map((submission, subIndex) =>
-                                    submission.screenshots?.map((screenshot, index) => {
+                                    submission.allScreenshots?.map((screenshot, index) => {
                                       const screenshotUrl = getScreenshotUrl(screenshot);
                                       return (
                                         <div key={`${subIndex}-${index}`} className="border-b pb-4 last:border-b-0">

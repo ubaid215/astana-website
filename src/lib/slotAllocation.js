@@ -15,6 +15,16 @@ export async function allocateSlot(participation) {
     return [];
   }
 
+  // Check if already assigned (prevent duplicate allocation)
+  if (participation.slotAssigned && participation.slotId) {
+    console.log('[allocateSlot] Participation already has slot assigned', {
+      participationId: participation._id,
+      slotId: participation.slotId,
+      timeSlot: participation.timeSlot
+    });
+    return [];
+  }
+
   const slots = [];
   let remainingShares = participation.shares;
   let remainingParticipants = [...(participation.members || [])];
@@ -89,13 +99,19 @@ export async function allocateSlot(participation) {
     throw new Error(availability.message);
   }
 
-  // Sort available slots by time and cow quality (earliest time for matching cow quality)
+  // Sort available slots by time and cow quality (prioritize preferred time slot)
   let sortedAvailableSlots = availability.availableSlots.sort((a, b) => {
-    // Prioritize slots with matching cowQuality and earlier time
+    // Prioritize preferred time slot
     if (a.timeSlot === preferredTimeSlot && b.timeSlot !== preferredTimeSlot) return -1;
     if (b.timeSlot === preferredTimeSlot && a.timeSlot !== preferredTimeSlot) return 1;
+    // Then sort by time (earliest first)
     return a.timeSlot.localeCompare(b.timeSlot);
   });
+
+  console.log('[allocateSlot] Available slots sorted:', sortedAvailableSlots.map(s => ({
+    timeSlot: s.timeSlot,
+    capacity: s.capacity
+  })));
 
   // Allocate shares across available slots
   for (const { timeSlot, capacity } of sortedAvailableSlots) {
@@ -123,9 +139,29 @@ export async function allocateSlot(participation) {
         cowQuality,
         participants: [participantData],
       });
+      console.log('[allocateSlot] Creating new slot', {
+        timeSlot,
+        day,
+        cowQuality,
+        shares: sharesToAllocate
+      });
     } else {
-      // Update existing slot
+      // Update existing slot - ensure cow quality matches
+      if (slot.cowQuality !== cowQuality) {
+        console.error('[allocateSlot] Cow quality mismatch', {
+          slotCowQuality: slot.cowQuality,
+          participationCowQuality: cowQuality,
+          timeSlot
+        });
+        continue; // Skip this slot
+      }
       slot.participants.push(participantData);
+      console.log('[allocateSlot] Adding to existing slot', {
+        slotId: slot._id,
+        timeSlot,
+        shares: sharesToAllocate,
+        totalParticipants: slot.participants.length
+      });
     }
 
     await slot.save();
@@ -136,6 +172,7 @@ export async function allocateSlot(participation) {
       timeSlot,
       shares: sharesToAllocate,
       participantNames: participantNamesForSlot,
+      remainingShares
     });
 
     // If this is the first slot, update participation with slot details
@@ -143,6 +180,11 @@ export async function allocateSlot(participation) {
       participation.slotId = slot._id;
       participation.timeSlot = slot.timeSlot;
       participation.slotAssigned = true;
+      console.log('[allocateSlot] Updated participation with primary slot', {
+        participationId: _id,
+        slotId: slot._id,
+        timeSlot: slot.timeSlot
+      });
     }
   }
 
@@ -150,14 +192,30 @@ export async function allocateSlot(participation) {
     console.error('[allocateSlot] Failed to allocate all shares', {
       participationId: _id,
       remainingShares,
+      allocatedSlots: slots.length
     });
-    throw new Error(`Failed to allocate ${remainingShares} remaining shares`);
+    
+    // Cleanup any allocated slots if we couldn't allocate everything
+    for (const slot of slots) {
+      slot.participants = slot.participants.filter(
+        p => p.participationId.toString() !== _id.toString()
+      );
+      if (slot.participants.length === 0) {
+        await Slot.findByIdAndDelete(slot._id);
+      } else {
+        await slot.save();
+      }
+    }
+    
+    throw new Error(`Failed to allocate ${remainingShares} remaining shares out of ${participation.shares} total shares`);
   }
 
   await participation.save();
-  console.log('[allocateSlot] Allocation completed', {
+  console.log('[allocateSlot] Allocation completed successfully', {
     participationId: _id,
-    slots: slots.map(s => s._id),
+    totalSlots: slots.length,
+    slotIds: slots.map(s => s._id),
+    primaryTimeSlot: participation.timeSlot
   });
 
   return slots;

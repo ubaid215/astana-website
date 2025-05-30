@@ -13,18 +13,16 @@ export async function POST(req) {
     }
 
     await connectDB();
-    const { sourceSlotId, destSlotId, sourceDay, destDay } = await req.json();
+    const { sourceSlotId, destSlotId, sourceDay, destDay, partialMove } = await req.json();
 
-    const sourceSlot = await Slot.findById(sourceSlotId);
+    const sourceSlot = await Slot.findById(sourceSlotId).lean();
     if (!sourceSlot) {
       return NextResponse.json({ error: 'Source slot not found' }, { status: 404 });
     }
 
-    let targetSlot;
+    let targetSlot = destSlotId ? await Slot.findById(destSlotId).lean() : null;
 
     if (destSlotId) {
-      // Dropping onto a specific target slot
-      targetSlot = await Slot.findById(destSlotId);
       if (!targetSlot) {
         return NextResponse.json({ error: 'Target slot not found' }, { status: 404 });
       }
@@ -32,7 +30,6 @@ export async function POST(req) {
         return NextResponse.json({ error: 'Slots must have the same cow quality' }, { status: 400 });
       }
     } else {
-      // Day drop: Find or create a new slot ensuring unique time slot across all cow qualities
       const allSlotsForDay = await Slot.find({ day: destDay });
       const occupiedTimeSlots = new Set(allSlotsForDay.map(slot => slot.timeSlot));
       const availableTimeSlots = (TIME_SLOTS[destDay] || []).filter(time => !occupiedTimeSlots.has(time));
@@ -42,7 +39,6 @@ export async function POST(req) {
       }
 
       const selectedTimeSlot = availableTimeSlots[0];
-
       targetSlot = new Slot({
         timeSlot: selectedTimeSlot,
         day: destDay,
@@ -56,94 +52,171 @@ export async function POST(req) {
     const totalTargetShares = targetSlot.participants.reduce((sum, p) => sum + p.shares, 0);
     let availableCapacity = 7 - totalTargetShares;
     let remainingShares = sourceSlot.participants.reduce((sum, p) => sum + p.shares, 0);
-
-    if (remainingShares <= 0) {
-      return NextResponse.json({ error: 'No shares to merge' }, { status: 400 });
-    }
-
-    if (availableCapacity <= 0) {
-      return NextResponse.json({ error: 'Target slot is full' }, { status: 400 });
-    }
-
-    const updatedTargetParticipants = [...targetSlot.participants];
-    const updatedSourceParticipants = [...sourceSlot.participants];
+    let updatedSourceParticipants = [...sourceSlot.participants];
+    const updatedTargetParticipants = [...(targetSlot.participants || [])];
     const mergeMetadata = [];
 
-    for (const sourceParticipant of sourceSlot.participants) {
-      if (remainingShares <= 0 || availableCapacity <= 0) break;
+    // Store original state for undo
+    const originalSourceState = { ...sourceSlot, participants: [...sourceSlot.participants] };
+    const originalTargetState = targetSlot._id ? { ...targetSlot, participants: [...targetSlot.participants] } : null;
 
-      if (!sourceParticipant.participationId) continue;
+    // Handle partial move for cross-day merging
+    const isCrossDay = sourceDay !== destDay;
+    if (partialMove && isCrossDay && remainingShares > availableCapacity) {
+      for (const sourceParticipant of sourceSlot.participants) {
+        if (remainingShares <= 0) break;
 
-      const sharesToMove = Math.min(sourceParticipant.shares, availableCapacity);
-      const namesToMove = sourceParticipant.participantNames.slice(0, sharesToMove);
+        const sharesToMove = Math.min(sourceParticipant.shares, availableCapacity);
+        if (sharesToMove <= 0) continue;
 
-      const existingIdx = updatedTargetParticipants.findIndex(
-        p => p.participationId?.toString() === sourceParticipant.participationId.toString()
-      );
+        const namesToMove = sourceParticipant.participantNames.slice(0, sharesToMove);
+        const existingIdx = updatedTargetParticipants.findIndex(
+          p => p.participationId?.toString() === sourceParticipant.participationId.toString()
+        );
 
-      if (existingIdx !== -1) {
-        updatedTargetParticipants[existingIdx].shares += sharesToMove;
-        updatedTargetParticipants[existingIdx].participantNames = [
-          ...new Set([...updatedTargetParticipants[existingIdx].participantNames, ...namesToMove]),
-        ];
-        updatedTargetParticipants[existingIdx].collectorName = [
-          updatedTargetParticipants[existingIdx].collectorName,
-          sourceParticipant.collectorName,
-        ].filter(Boolean).join(' - ');
-      } else {
-        updatedTargetParticipants.push({
-          ...sourceParticipant,
+        if (existingIdx !== -1) {
+          updatedTargetParticipants[existingIdx].shares += sharesToMove;
+          updatedTargetParticipants[existingIdx].participantNames = [
+            ...new Set([...updatedTargetParticipants[existingIdx].participantNames, ...namesToMove]),
+          ];
+          updatedTargetParticipants[existingIdx].collectorName = [
+            updatedTargetParticipants[existingIdx].collectorName,
+            sourceParticipant.collectorName,
+          ].filter(Boolean).join(' - ');
+        } else {
+          updatedTargetParticipants.push({
+            ...sourceParticipant,
+            shares: sharesToMove,
+            participantNames: namesToMove,
+          });
+        }
+
+        mergeMetadata.push({
+          participationId: sourceParticipant.participationId,
           shares: sharesToMove,
           participantNames: namesToMove,
+          collectorName: sourceParticipant.collectorName,
+          originalTimeSlot: sourceSlot.timeSlot,
+          originalDay: sourceDay,
+          sourceSlotId: sourceSlot._id,
+          targetSlotId: targetSlot._id,
         });
-      }
 
-      mergeMetadata.push({
-        participationId: sourceParticipant.participationId,
-        shares: sharesToMove,
-        participantNames: namesToMove,
-        collectorName: sourceParticipant.collectorName,
-        originalTimeSlot: sourceSlot.timeSlot,
-        originalDay: sourceDay,
-        sourceSlotId: sourceSlot._id,
-      });
-
-      const sourceIdx = updatedSourceParticipants.findIndex(
-        p => p.participationId?.toString() === sourceParticipant.participationId.toString()
-      );
-      if (sourceIdx !== -1) {
-        updatedSourceParticipants[sourceIdx].shares -= sharesToMove;
-        updatedSourceParticipants[sourceIdx].participantNames =
-          updatedSourceParticipants[sourceIdx].participantNames.slice(sharesToMove);
-        if (updatedSourceParticipants[sourceIdx].shares <= 0) {
-          updatedSourceParticipants.splice(sourceIdx, 1);
+        const sourceIdx = updatedSourceParticipants.findIndex(
+          p => p.participationId?.toString() === sourceParticipant.participationId.toString()
+        );
+        if (sourceIdx !== -1) {
+          updatedSourceParticipants[sourceIdx].shares -= sharesToMove;
+          updatedSourceParticipants[sourceIdx].participantNames =
+            updatedSourceParticipants[sourceIdx].participantNames.slice(sharesToMove);
+          if (updatedSourceParticipants[sourceIdx].shares <= 0) {
+            updatedSourceParticipants.splice(sourceIdx, 1);
+          }
         }
-      }
 
-      remainingShares -= sharesToMove;
-      availableCapacity -= sharesToMove;
+        remainingShares -= sharesToMove;
+        availableCapacity -= sharesToMove;
+      }
+    } else {
+      // Full move for same-day or when partial move is not requested
+      for (const sourceParticipant of sourceSlot.participants) {
+        if (remainingShares <= 0) break;
+
+        const sharesToMove = Math.min(sourceParticipant.shares, availableCapacity);
+        if (sharesToMove <= 0) continue;
+
+        const namesToMove = sourceParticipant.participantNames.slice(0, sharesToMove);
+        const existingIdx = updatedTargetParticipants.findIndex(
+          p => p.participationId?.toString() === sourceParticipant.participationId.toString()
+        );
+
+        if (existingIdx !== -1) {
+          updatedTargetParticipants[existingIdx].shares += sharesToMove;
+          updatedTargetParticipants[existingIdx].participantNames = [
+            ...new Set([...updatedTargetParticipants[existingIdx].participantNames, ...namesToMove]),
+          ];
+          updatedTargetParticipants[existingIdx].collectorName = [
+            updatedTargetParticipants[existingIdx].collectorName,
+            sourceParticipant.collectorName,
+          ].filter(Boolean).join(' - ');
+        } else {
+          updatedTargetParticipants.push({
+            ...sourceParticipant,
+            shares: sharesToMove,
+            participantNames: namesToMove,
+          });
+        }
+
+        mergeMetadata.push({
+          participationId: sourceParticipant.participationId,
+          shares: sharesToMove,
+          participantNames: namesToMove,
+          collectorName: sourceParticipant.collectorName,
+          originalTimeSlot: sourceSlot.timeSlot,
+          originalDay: sourceDay,
+          sourceSlotId: sourceSlot._id,
+          targetSlotId: targetSlot._id,
+        });
+
+        const sourceIdx = updatedSourceParticipants.findIndex(
+          p => p.participationId?.toString() === sourceParticipant.participationId.toString()
+        );
+        if (sourceIdx !== -1) {
+          updatedSourceParticipants[sourceIdx].shares -= sharesToMove;
+          updatedSourceParticipants[sourceIdx].participantNames =
+            updatedSourceParticipants[sourceIdx].participantNames.slice(sharesToMove);
+          if (updatedSourceParticipants[sourceIdx].shares <= 0) {
+            updatedSourceParticipants.splice(sourceIdx, 1);
+          }
+        }
+
+        remainingShares -= sharesToMove;
+        availableCapacity -= sharesToMove;
+      }
     }
 
-    targetSlot.participants = updatedTargetParticipants;
-    targetSlot.mergeMetadata = [...(targetSlot.mergeMetadata || []), ...mergeMetadata];
-    await targetSlot.save();
-
-    if (updatedSourceParticipants.length > 0) {
-      sourceSlot.participants = updatedSourceParticipants;
-      await sourceSlot.save();
-    } else {
+    // Preserve remaining participants in source slot
+    if (remainingShares > 0 && updatedSourceParticipants.length > 0) {
+      const updatedSource = await Slot.findByIdAndUpdate(
+        sourceSlotId,
+        { $set: { participants: updatedSourceParticipants } },
+        { new: true, runValidators: true }
+      );
+    } else if (updatedSourceParticipants.length === 0) {
       await Slot.findByIdAndDelete(sourceSlotId);
     }
 
+    // Save target slot with merge metadata
+    let updatedTargetSlot;
+    if (!targetSlot._id) {
+      targetSlot.participants = updatedTargetParticipants;
+      targetSlot.mergeMetadata = mergeMetadata;
+      updatedTargetSlot = await targetSlot.save();
+    } else {
+      updatedTargetSlot = await Slot.findByIdAndUpdate(
+        targetSlot._id,
+        { $set: { participants: updatedTargetParticipants, mergeMetadata: mergeMetadata } },
+        { new: true, runValidators: true }
+      );
+    }
+
+    // Store undo data
+    await Slot.findByIdAndUpdate(
+      updatedTargetSlot._id,
+      { $push: { undoHistory: { originalSourceState, originalTargetState, timestamp: new Date() } } },
+      { new: true, runValidators: true }
+    );
+
     const io = getIO();
     if (io) {
-      io.to('admin').emit('slotUpdated', targetSlot);
-      if (updatedSourceParticipants.length > 0) {
-        io.to('admin').emit('slotUpdated', sourceSlot);
+      io.to('admin').emit('slotUpdated', updatedTargetSlot);
+      if (remainingShares > 0 && updatedSourceParticipants.length > 0) {
+        const updatedSourceSlot = await Slot.findById(sourceSlotId);
+        io.to('admin').emit('slotUpdated', updatedSourceSlot);
       } else {
-        io.to('admin').emit('slotDeleted', { slotId: sourceSlotId });
+        io.to('admin').emit('slotDeleted', sourceSlotId); // Emit slotId directly
       }
-      io.to('admin').emit('mergePerformed', { slotId: targetSlot._id });
+      io.to('admin').emit('mergePerformed', { slotId: updatedTargetSlot._id });
     }
 
     const allSlots = await Slot.find();

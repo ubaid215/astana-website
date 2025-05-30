@@ -68,60 +68,104 @@ export function useSocket() {
     // Application-specific events
     socketInstance.on('participationDeleted', (deletedId) => {
       console.log('[Socket.io] Participation deleted:', deletedId);
-      setParticipations((prev) => prev.filter((p) => p._id !== deletedId));
+      if (deletedId) {
+        setParticipations((prev) => prev.filter((p) => p._id !== deletedId));
+      }
     });
 
     socketInstance.on('participationCreated', (newParticipation) => {
       console.log('[Socket.io] Participation created:', newParticipation);
-      setParticipations((prev) => [...prev, newParticipation]);
+      if (newParticipation && newParticipation._id) {
+        setParticipations((prev) => [...prev, newParticipation]);
+      }
     });
 
     socketInstance.on('participationUpdated', (updatedParticipation) => {
       console.log('[Socket.io] Participation updated:', updatedParticipation);
-      setParticipations((prev) =>
-        prev.map((p) => (p._id === updatedParticipation._id ? updatedParticipation : p))
-      );
+      if (updatedParticipation && updatedParticipation._id) {
+        setParticipations((prev) =>
+          prev.map((p) => (p._id === updatedParticipation._id ? updatedParticipation : p))
+        );
+      }
     });
 
     socketInstance.on('slotCreated', (newSlot) => {
       console.log('[Socket.io] Slot created:', newSlot);
-      setSlots((prev) => [...prev, newSlot]);
+      if (newSlot && newSlot._id) {
+        setSlots((prev) => [...prev, newSlot]);
+      }
     });
 
     socketInstance.on('slotUpdated', (updatedSlot) => {
       console.log('[Socket.io] Slot updated:', updatedSlot);
-      setSlots((prev) => prev.map((s) => (s._id === updatedSlot._id ? updatedSlot : s)));
+      if (updatedSlot && updatedSlot._id) {
+        setSlots((prev) => prev.map((s) => (s._id === updatedSlot._id ? updatedSlot : s)));
+      } else {
+        console.warn('[Socket.io] Received invalid slot update data:', updatedSlot);
+      }
     });
 
-    socketInstance.on('slotDeleted', (deletedId) => {
-      console.log('[Socket.io] Slot deleted:', deletedId);
-      setSlots((prev) => prev.filter((s) => s._id !== deletedId));
+    socketInstance.on('slotDeleted', (deletedData) => {
+      console.log('[Socket.io] Slot deleted:', deletedData);
+      
+      // Handle both string ID and object with slotId
+      let deletedId;
+      if (typeof deletedData === 'string') {
+        deletedId = deletedData;
+      } else if (deletedData && deletedData.slotId) {
+        deletedId = deletedData.slotId;
+      } else if (deletedData && deletedData._id) {
+        deletedId = deletedData._id;
+      }
+      
+      if (deletedId) {
+        setSlots((prev) => prev.filter((s) => s._id !== deletedId));
+      } else {
+        console.warn('[Socket.io] Received invalid slot deletion data:', deletedData);
+      }
     });
 
     socketInstance.on('pricesUpdated', (newPrices) => {
       console.log('[Socket.io | Client] Prices updated:', newPrices);
-      setPrices(newPrices);
+      if (newPrices) {
+        setPrices(newPrices);
+      }
     });
 
     socketInstance.on('notification', (notification) => {
       console.log('[Socket.io] Notification received:', notification);
-      setNotifications((prev) => [...prev, notification]);
+      if (notification) {
+        setNotifications((prev) => [...prev, notification]);
+      }
     });
 
     socketInstance.on('paymentSubmission', (notification) => {
       console.log('[Socket.io] Payment submission received:', notification);
-      setNotifications((prev) => {
-        const newNotifications = [{
-          type: 'payment',
-          userName: notification.userName,
-          participationId: notification.participationId,
-          transactionId: notification.transactionId,
-          screenshot: notification.screenshot,
-          timestamp: new Date(notification.timestamp),
-          read: false
-        }, ...prev];
-        return newNotifications.slice(0, 50);
-      });
+      if (notification && notification.userName && notification.participationId) {
+        setNotifications((prev) => {
+          const newNotifications = [{
+            type: 'payment',
+            userName: notification.userName,
+            participationId: notification.participationId,
+            transactionId: notification.transactionId,
+            screenshot: notification.screenshot,
+            timestamp: new Date(notification.timestamp),
+            read: false
+          }, ...prev];
+          return newNotifications.slice(0, 50);
+        });
+      }
+    });
+
+    // Handle merge-specific events
+    socketInstance.on('mergePerformed', (data) => {
+      console.log('[Socket.io] Merge performed:', data);
+      // Optionally trigger a refresh or handle merge-specific logic
+    });
+
+    socketInstance.on('mergeUndone', (data) => {
+      console.log('[Socket.io] Merge undone:', data);
+      // Optionally trigger a refresh or handle undo-specific logic
     });
 
     setSocket(socketInstance);
@@ -144,6 +188,8 @@ export function useSocket() {
       socketInstance.off('pricesUpdated');
       socketInstance.off('notification');
       socketInstance.off('paymentSubmission');
+      socketInstance.off('mergePerformed');
+      socketInstance.off('mergeUndone');
       socketInstance.disconnect();
       setConnected(false);
     };

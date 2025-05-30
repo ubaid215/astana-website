@@ -57,15 +57,21 @@ export async function POST(req) {
     });
 
     const updatedSlots = [targetSlot];
+    
     for (const [key, data] of Object.entries(sourceSlotsData)) {
       let sourceSlot = await Slot.findById(data.sourceSlotId);
+      
       if (!sourceSlot) {
-        // Recreate source slot
+        // Source slot was completely deleted - recreate it
         const availableSlots = await Slot.find({ day: data.originalDay, cowQuality: targetSlot.cowQuality });
+        const occupiedTimeSlots = new Set(availableSlots.map(slot => slot.timeSlot));
         const availableTimes = TIME_SLOTS[data.originalDay].filter(
-          (time) => !availableSlots.some((slot) => slot.timeSlot === time)
+          time => !occupiedTimeSlots.has(time)
         );
-        const timeSlot = availableTimes.includes(data.originalTimeSlot) ? data.originalTimeSlot : (availableTimes.sort()[0] || data.originalTimeSlot);
+        const timeSlot = availableTimes.includes(data.originalTimeSlot)
+          ? data.originalTimeSlot
+          : (availableTimes.sort()[0] || data.originalTimeSlot);
+
         sourceSlot = new Slot({
           _id: data.sourceSlotId,
           timeSlot,
@@ -77,21 +83,36 @@ export async function POST(req) {
         });
       }
 
-      // Restore participants to source slot
+      // Restore participants to source slot (add back the moved participants)
       for (const participant of data.participants) {
         const existingSourceIdx = sourceSlot.participants.findIndex(
           p => p.participationId.toString() === participant.participationId.toString()
         );
+
         if (existingSourceIdx !== -1) {
+          // Participant already exists in source slot (remaining participants)
+          // Add back the moved shares and names
           sourceSlot.participants[existingSourceIdx].shares += participant.shares;
+          
+          // Merge participant names, avoiding duplicates
+          const existingNames = new Set(sourceSlot.participants[existingSourceIdx].participantNames);
+          const newNames = participant.participantNames.filter(name => !existingNames.has(name));
           sourceSlot.participants[existingSourceIdx].participantNames = [
-            ...new Set([
-              ...sourceSlot.participants[existingSourceIdx].participantNames,
-              ...participant.participantNames,
-            ]),
+            ...sourceSlot.participants[existingSourceIdx].participantNames,
+            ...newNames
           ];
-          sourceSlot.participants[existingSourceIdx].collectorName = participant.collectorName;
+          
+          // Update collector name if needed
+          const currentCollector = sourceSlot.participants[existingSourceIdx].collectorName;
+          if (currentCollector !== participant.collectorName) {
+            sourceSlot.participants[existingSourceIdx].collectorName = 
+              [currentCollector, participant.collectorName]
+              .filter(Boolean)
+              .filter((name, index, arr) => arr.indexOf(name) === index) // Remove duplicates
+              .join(' - ');
+          }
         } else {
+          // Participant doesn't exist in source slot - add them back completely
           sourceSlot.participants.push({
             participationId: participant.participationId,
             shares: participant.shares,
@@ -101,29 +122,61 @@ export async function POST(req) {
         }
       }
 
+      // Validate shares and participant names consistency
+      sourceSlot.participants = sourceSlot.participants.map(participant => {
+        const maxShares = participant.participantNames.length;
+        const validShares = Math.min(participant.shares, maxShares);
+        return {
+          ...participant,
+          shares: validShares,
+          participantNames: participant.participantNames.slice(0, validShares),
+        };
+      }).filter(participant => participant.shares > 0);
+
       await sourceSlot.save();
       updatedSlots.push(sourceSlot);
 
-      // Remove participants from target slot
+      // Remove the moved participants from target slot
       for (const participant of data.participants) {
         const targetIdx = targetSlot.participants.findIndex(
           p => p.participationId.toString() === participant.participationId.toString()
         );
+        
         if (targetIdx !== -1) {
           targetSlot.participants[targetIdx].shares -= participant.shares;
-          targetSlot.participants[targetIdx].participantNames = targetSlot.participants[targetIdx].participantNames.filter(
-            name => !participant.participantNames.includes(name)
+          
+          // Remove the specific participant names that were moved
+          targetSlot.participants[targetIdx].participantNames = 
+            targetSlot.participants[targetIdx].participantNames.filter(
+              name => !participant.participantNames.includes(name)
+            );
+          
+          // Update collector name - remove the moved collector's name
+          const collectorNames = targetSlot.participants[targetIdx].collectorName.split(' - ');
+          const updatedCollectorNames = collectorNames.filter(
+            name => name.trim() !== participant.collectorName.trim()
           );
-          targetSlot.participants[targetIdx].collectorName = targetSlot.participants[targetIdx].collectorName
-            .split(' - ')
-            .filter(name => name !== participant.collectorName)
-            .join(' - ') || targetSlot.participants[targetIdx].collectorName;
+          targetSlot.participants[targetIdx].collectorName = 
+            updatedCollectorNames.length > 0 ? updatedCollectorNames.join(' - ') : participant.collectorName;
+
+          // Remove participant if no shares left
           if (targetSlot.participants[targetIdx].shares <= 0) {
             targetSlot.participants.splice(targetIdx, 1);
           }
         }
       }
     }
+
+    // Validate target slot shares and participant names consistency
+    targetSlot.participants = targetSlot.participants.map(participant => {
+      const maxShares = participant.participantNames.length;
+      const validShares = Math.min(participant.shares, maxShares);
+      return {
+        ...participant,
+        shares: validShares,
+        participantNames: participant.participantNames.slice(0, validShares),
+      };
+    }).filter(participant => participant.shares > 0);
 
     // Clear mergeMetadata and save or delete target slot
     targetSlot.mergeMetadata = [];
@@ -134,9 +187,12 @@ export async function POST(req) {
       await targetSlot.save();
     }
 
+    // Emit socket events
     const io = getIO();
     if (io) {
-      updatedSlots.forEach(slot => io.to('admin').emit('slotUpdated', slot));
+      updatedSlots.forEach(slot => {
+        io.to('admin').emit('slotUpdated', slot);
+      });
       if (targetSlot.participants.length === 0) {
         io.to('admin').emit('slotDeleted', { slotId: targetSlot._id });
       }

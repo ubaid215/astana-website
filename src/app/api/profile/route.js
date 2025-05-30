@@ -1,6 +1,8 @@
+// src/app/api/profile/route.js
 import connectDB from '@/lib/db/mongodb';
 import Participation from '@/lib/db/models/Participation';
 import User from '@/lib/db/models/User';
+import Slot from '@/lib/db/models/Slot'; // Add this import
 import { NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import mongoose from 'mongoose';
@@ -60,9 +62,8 @@ export async function GET(req) {
         )
       : [];
 
-    // Calculate stats properly
     const totalPaymentSubmissions = formattedParticipations.reduce(
-      (sum, p) => sum + (p.paymentSubmissions?.length || 0), 
+      (sum, p) => sum + (p.paymentSubmissions?.length || 0),
       0
     );
 
@@ -78,7 +79,7 @@ export async function GET(req) {
       {
         participations: formattedParticipations,
         qurbaniCompletions: sortedCompletions,
-        stats: stats, // Add stats to response
+        stats: stats,
       },
       { status: 200 }
     );
