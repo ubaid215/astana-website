@@ -9,7 +9,7 @@ import { useSession } from 'next-auth/react';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Input } from '@/components/ui/Input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select';
-import { Edit2, Check, X, GripVertical, RotateCcw } from 'lucide-react';
+import { Edit2, Check, X, GripVertical, RotateCcw, Trash2 } from 'lucide-react';
 
 // Global drag state
 let globalDragState = {
@@ -39,6 +39,9 @@ export default function SlotTable({ initialSlots, day }) {
   });
   const [undoChecked, setUndoChecked] = useState(false);
   const [undoError, setUndoError] = useState(null);
+  const [addingParticipant, setAddingParticipant] = useState(null);
+  const [newParticipantName, setNewParticipantName] = useState('');
+  const [addParticipantError, setAddParticipantError] = useState('');
 
   // Fetch available time slots
   const fetchAvailableTimeSlots = useCallback(async (day, cowQuality) => {
@@ -149,6 +152,67 @@ export default function SlotTable({ initialSlots, day }) {
     };
 
     const handleParticipantNameUpdated = ({ slotId, participationId, index, newName }) => {
+      console.log('[SlotTable] Received participantNameUpdated:', {
+        slotId,
+        participationId,
+        index,
+        newName,
+        currentSlots: JSON.stringify(slots),
+      });
+      setSlots(prevSlots => {
+        const updatedSlots = prevSlots.map(slot => {
+          if (slot._id.toString() === slotId.toString()) {
+            console.log('[SlotTable] Updating slot:', slot._id);
+            return {
+              ...slot,
+              participants: slot.participants.map(participant => {
+                if (participant.participationId.toString() === participationId.toString()) {
+                  console.log('[SlotTable] Updating participant:', participant.participationId);
+                  const updatedNames = [...participant.participantNames];
+                  updatedNames[index] = newName;
+                  return { ...participant, participantNames: updatedNames };
+                }
+                return participant;
+              }),
+            };
+          }
+          return slot;
+        });
+        console.log('[SlotTable] Updated slots:', JSON.stringify(updatedSlots));
+        setForceUpdate(prev => prev + 1);
+        return updatedSlots;
+      });
+      toast({ title: 'Participant Name Updated', description: `Name updated to ${newName}`, variant: 'success' });
+    };
+
+    const handleParticipantDeleted = ({ slotId, participationId, index }) => {
+      console.log('[SlotTable] Received participantDeleted:', { slotId, participationId, index });
+      setSlots(prevSlots => {
+        const updatedSlots = prevSlots.map(slot => {
+          if (slot._id.toString() === slotId.toString()) {
+            return {
+              ...slot,
+              participants: slot.participants.map(participant => {
+                if (participant.participationId.toString() === participationId.toString()) {
+                  const updatedNames = [...participant.participantNames];
+                  updatedNames.splice(index, 1);
+                  return { ...participant, participantNames: updatedNames };
+                }
+                return participant;
+              }).filter(participant => participant.participantNames.length > 0),
+            };
+          }
+          return slot;
+        }).filter(slot => slot.participants.length > 0);
+        console.log('[SlotTable] Updated slots after deletion:', JSON.stringify(updatedSlots));
+        setForceUpdate(prev => prev + 1);
+        return updatedSlots;
+      });
+      toast({ title: 'Participant Deleted', description: 'Participant removed successfully', variant: 'success' });
+    };
+
+    const handleParticipantAdded = ({ slotId, participationId, index, newName }) => {
+      console.log('[SlotTable] Received participantAdded:', { slotId, participationId, index, newName });
       setSlots(prevSlots => {
         const updatedSlots = prevSlots.map(slot => {
           if (slot._id.toString() === slotId.toString()) {
@@ -161,14 +225,16 @@ export default function SlotTable({ initialSlots, day }) {
                   return { ...participant, participantNames: updatedNames };
                 }
                 return participant;
-              })
+              }),
             };
           }
           return slot;
         });
+        console.log('[SlotTable] Updated slots after addition:', JSON.stringify(updatedSlots));
+        setForceUpdate(prev => prev + 1);
         return updatedSlots;
       });
-      toast({ title: 'Participant Name Updated', description: `Name updated to ${newName}`, variant: 'success' });
+      toast({ title: 'Participant Added', description: `Added ${newName}`, variant: 'success' });
     };
 
     const handleMergePerformed = () => {
@@ -190,6 +256,8 @@ export default function SlotTable({ initialSlots, day }) {
     socket.on('slotUpdated', handleSlotUpdated);
     socket.on('slotCompleted', handleSlotCompleted);
     socket.on('participantNameUpdated', handleParticipantNameUpdated);
+    socket.on('participantDeleted', handleParticipantDeleted);
+    socket.on('participantAdded', handleParticipantAdded);
     socket.on('mergePerformed', handleMergePerformed);
     socket.on('mergeUndone', handleMergeUndone);
     socket.on('connect_error', (error) => {
@@ -202,6 +270,8 @@ export default function SlotTable({ initialSlots, day }) {
       socket.off('slotUpdated', handleSlotUpdated);
       socket.off('slotCompleted', handleSlotCompleted);
       socket.off('participantNameUpdated', handleParticipantNameUpdated);
+      socket.off('participantDeleted', handleParticipantDeleted);
+      socket.off('participantAdded', handleParticipantAdded);
       socket.off('mergePerformed', handleMergePerformed);
       socket.off('mergeUndone', handleMergeUndone);
       socket.off('connect_error');
@@ -231,24 +301,84 @@ export default function SlotTable({ initialSlots, day }) {
           setNameError(validationError);
           return;
         }
+        console.log('[SlotTable] Updating participant name:', { slotId, participationId, index, newName });
         const response = await fetch('/api/participation/update-name', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ participationId, index, newName }),
         });
+        const data = await response.json();
         if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to update name');
+          console.error('[SlotTable] Failed to update name:', data.error);
+          throw new Error(data.error || 'Failed to update name');
         }
         setEditingParticipant(null);
         setEditedName('');
         setNameError('');
         toast({ title: 'Success', description: 'Participant name updated', variant: 'success' });
       } catch (error) {
+        console.error('[SlotTable] Error updating participant name:', error.message);
         toast({ title: 'Error', description: error.message || 'Failed to update name', variant: 'destructive' });
       }
     },
     [toast, isAdmin]
+  );
+
+  const handleDeleteParticipant = useCallback(
+    async (slotId, participationId, index) => {
+      try {
+        if (!isAdmin) throw new Error('Admin access required');
+        if (!window.confirm('Are you sure you want to delete this participant?')) return;
+        console.log('[SlotTable] Deleting participant:', { slotId, participationId, index });
+        const response = await fetch('/api/participation/delete-participant', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ participationId, index }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          console.error('[SlotTable] Failed to delete participant:', data.error);
+          throw new Error(data.error || 'Failed to delete participant');
+        }
+        toast({ title: 'Success', description: 'Participant deleted', variant: 'success' });
+      } catch (error) {
+        console.error('[SlotTable] Error deleting participant:', error.message);
+        toast({ title: 'Error', description: error.message || 'Failed to delete participant', variant: 'destructive' });
+      }
+    },
+    [toast, isAdmin]
+  );
+
+  const handleAddParticipant = useCallback(
+    async (slotId, participationId) => {
+      try {
+        if (!isAdmin) throw new Error('Admin access required');
+        const validationError = validateName(newParticipantName);
+        if (validationError) {
+          setAddParticipantError(validationError);
+          return;
+        }
+        console.log('[SlotTable] Adding participant:', { slotId, participationId, newParticipantName });
+        const response = await fetch('/api/participation/update-name', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ participationId, newName: newParticipantName }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          console.error('[SlotTable] Failed to add participant:', data.error);
+          throw new Error(data.error || 'Failed to add participant');
+        }
+        setAddingParticipant(null);
+        setNewParticipantName('');
+        setAddParticipantError('');
+        toast({ title: 'Success', description: 'Participant added', variant: 'success' });
+      } catch (error) {
+        console.error('[SlotTable] Error adding participant:', error.message);
+        toast({ title: 'Error', description: error.message || 'Failed to add participant', variant: 'destructive' });
+      }
+    },
+    [toast, isAdmin, newParticipantName]
   );
 
   const startEditing = (slotId, participationId, index, currentName) => {
@@ -256,6 +386,18 @@ export default function SlotTable({ initialSlots, day }) {
     setEditedName(currentName);
     setNameError('');
     setShowConfirm(null);
+  };
+
+  const startAddingParticipant = (slotId, participationId) => {
+    setAddingParticipant({ slotId: slotId.toString(), participationId: participationId.toString() });
+    setNewParticipantName('');
+    setAddParticipantError('');
+  };
+
+  const cancelAddingParticipant = () => {
+    setAddingParticipant(null);
+    setNewParticipantName('');
+    setAddParticipantError('');
   };
 
   const startEditingTimeSlot = (slotId, currentTimeSlot, cowQuality) => {
@@ -354,27 +496,27 @@ export default function SlotTable({ initialSlots, day }) {
   );
 
   const handleUndoMerge = useCallback(async (slotId) => {
-  try {
-    if (!isAdmin) throw new Error('Admin access required');
-    const response = await fetch('/api/slots/undo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ slotId }),
-    });
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to undo merge');
+    try {
+      if (!isAdmin) throw new Error('Admin access required');
+      const response = await fetch('/api/slots/undo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slotId }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to undo merge');
+      }
+      const updatedSlots = await response.json();
+      setSlots(updatedSlots);
+      setCanUndo(false);
+      setUndoChecked(true);
+      setUndoError(null);
+      toast({ title: 'Success', description: 'Merge undone', variant: 'success' });
+    } catch (error) {
+      toast({ title: 'Error', description: `Failed to undo merge: ${error.message}`, variant: 'destructive' });
     }
-    const updatedSlots = await response.json();
-    setSlots(updatedSlots);
-    setCanUndo(false); // Reset undo flag after successful undo
-    setUndoChecked(true);
-    setUndoError(null);
-    toast({ title: 'Success', description: 'Merge undone', variant: 'success' });
-  } catch (error) {
-    toast({ title: 'Error', description: `Failed to undo merge: ${error.message}`, variant: 'destructive' });
-  }
-}, [toast, isAdmin, setSlots]);
+  }, [toast, isAdmin, setSlots]);
 
   const canSlotAccommodate = (targetSlot, draggedSlot) => {
     if (!targetSlot || !draggedSlot) return false;
@@ -500,6 +642,7 @@ export default function SlotTable({ initialSlots, day }) {
       toast({ title: 'Success', description: 'Slot moved successfully', variant: 'success' });
     } catch (error) {
       toast({ title: 'Error', description: `Failed to merge slots: ${error.message}`, variant: 'destructive' });
+      return;
     } finally {
       globalDragState.draggedSlot = null;
       globalDragState.dragInProgress = false;
@@ -535,7 +678,7 @@ export default function SlotTable({ initialSlots, day }) {
     .sort((a, b) => a.timeSlot.localeCompare(b.timeSlot));
 
   const getSlotDropZoneClass = (slot) => {
-    const baseClass = "transition-all duration-200";
+    const baseClass = 'transition-all duration-200';
     if (dragOverTarget === `slot-${slot._id}`) {
       return `${baseClass} bg-green-50 border-2 border-green-300 border-dashed shadow-inner`;
     }
@@ -591,10 +734,11 @@ export default function SlotTable({ initialSlots, day }) {
         </div>
 
         <div
-          className={`overflow-x-auto transition-all duration-200 p-4 rounded-lg border ${dragOverTarget === `day-${day}`
+          className={`overflow-x-auto transition-all duration-200 p-4 rounded-lg border ${
+            dragOverTarget === `day-${day}`
               ? 'bg-blue-50 border-2 border-blue-300 border-dashed shadow-inner'
               : 'border-gray-200'
-            }`}
+          }`}
           onDragOver={handleDragOver}
           onDragEnter={handleDayDragEnter}
           onDragLeave={handleDragLeave}
@@ -633,11 +777,11 @@ export default function SlotTable({ initialSlots, day }) {
                     <TableRow
                       key={slot._id}
                       className={`${getSlotDropZoneClass(slot)} ${isMerged ? 'bg-yellow-50' : ''} hover:bg-gray-100 transition-colors`}
+                      draggable={isAdmin}
                       onDragOver={handleDragOver}
                       onDragEnter={(e) => handleSlotDragEnter(e, slot)}
                       onDragLeave={handleDragLeave}
                       onDrop={(e) => handleSlotDrop(e, slot)}
-                      draggable={isAdmin}
                       onDragStart={(e) => handleDragStart(e, slot)}
                       onDragEnd={handleDragEnd}
                     >
@@ -731,8 +875,8 @@ export default function SlotTable({ initialSlots, day }) {
                         {participantEntries.map((entry, displayIndex) => (
                           <div key={`${entry.participationId}-${entry.nameIndex}`} className="flex items-center space-y-1">
                             <span className="text-sm text-gray-500 mr-2">{displayIndex + 1}.</span>
-                            {isAdmin && editingParticipant?.slotId === slot._id?.toString() &&
-                              editingParticipant?.participationId === entry.participationId?.toString() &&
+                            {isAdmin && editingParticipant?.slotId === slot._id.toString() &&
+                              editingParticipant?.participationId === entry.participationId.toString() &&
                               editingParticipant?.index === entry.nameIndex ? (
                               <div className="flex flex-col w-full">
                                 <div className="flex items-center space-x-2">
@@ -780,20 +924,88 @@ export default function SlotTable({ initialSlots, day }) {
                               <div className="flex items-center space-x-2 group">
                                 <span className={isMerged ? 'text-blue-600' : 'text-gray-800'}>{entry.name}</span>
                                 {isAdmin && (
-                                  <Button
-                                    size="sm"
-                                    onClick={() => startEditing(slot._id, entry.participationId, entry.nameIndex, entry.name)}
-                                    className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity bg-blue-600 hover:bg-blue-700"
-                                    aria-label="Edit participant name"
-                                    title="Edit"
-                                  >
-                                    <Edit2 className="h-4 w-4" />
-                                  </Button>
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      onClick={() => startEditing(slot._id, entry.participationId, entry.nameIndex, entry.name)}
+                                      className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity bg-blue-600 hover:bg-blue-700"
+                                      aria-label="Edit participant name"
+                                      title="Edit"
+                                    >
+                                      <Edit2 className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      onClick={() => handleDeleteParticipant(slot._id, entry.participationId, entry.nameIndex)}
+                                      className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity bg-red-600 hover:bg-red-700"
+                                      aria-label="Delete participant"
+                                      title="Delete"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </>
                                 )}
                               </div>
                             )}
                           </div>
                         ))}
+                        {isAdmin && addingParticipant?.slotId === slot._id.toString() ? (
+                          <div className="flex flex-col w-full mt-4">
+                            <div className="flex items-center space-x-2">
+                              <Input
+                                value={newParticipantName}
+                                onChange={(e) => {
+                                  setNewParticipantName(e.target.value);
+                                  setAddParticipantError(validateName(e.target.value));
+                                }}
+                                placeholder="New participant name"
+                                className="text-sm h-8 px-3 border-gray-300"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && !addParticipantError) {
+                                    handleAddParticipant(slot._id, slot.participants[0].participationId);
+                                  } else if (e.key === 'Escape') {
+                                    cancelAddingParticipant();
+                                  }
+                                }}
+                              />
+                              <Button
+                                size="sm"
+                                onClick={() => handleAddParticipant(slot._id, slot.participants[0].participationId)}
+                                className="h-8 w-8 p-0 bg-green-600 hover:bg-green-700"
+                                aria-label="Confirm add participant"
+                                title="Confirm"
+                                disabled={!!addParticipantError || !newParticipantName || newParticipantName.trim() === ''}
+                              >
+                                <Check className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={cancelAddingParticipant}
+                                className="h-8 w-8 p-0 bg-gray-600 hover:bg-gray-700"
+                                aria-label="Cancel adding participant"
+                                title="Cancel"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            {addParticipantError && (
+                              <span className="text-sm text-red-600 mt-2">{addParticipantError}</span>
+                            )}
+                          </div>
+                        ) : (
+                          isAdmin && (
+                            <Button
+                              size="sm"
+                              onClick={() => startAddingParticipant(slot._id, slot.participants[0].participationId)}
+                              className="mt-2 bg-green-600 hover:bg-green-700 text-white text-xs"
+                              aria-label="Add new participant"
+                              title="Add new participant"
+                            >
+                              Add Participant
+                            </Button>
+                          )
+                        )}
                       </TableCell>
                       <TableCell className="font-medium">
                         <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
@@ -843,10 +1055,13 @@ export default function SlotTable({ initialSlots, day }) {
               ) : (
                 <TableRow>
                   <TableCell colSpan={isAdmin ? 8 : 5} className="text-center py-12">
-                    <div className={`transition-all duration-200 ${dragOverTarget === `day-${day}`
-                      ? 'text-blue-600 font-medium text-lg animate-pulse'
-                      : 'text-gray-500'
-                      }`}>
+                    <div
+                      className={`transition-all duration-200 ${
+                        dragOverTarget === `day-${day}`
+                          ? 'text-blue-600 font-medium text-lg animate-pulse'
+                          : 'text-gray-500'
+                      }`}
+                    >
                       {dragOverTarget === `day-${day}`
                         ? '📥 Drop slot here to add to this day'
                         : `No slots assigned for Day ${day}`}

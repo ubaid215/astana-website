@@ -78,10 +78,10 @@ export default function Header() {
             <FaUser className="text-lg" />
             <span>Profile</span>
           </Link>
-          <Link href="/participation" className={getLinkStyle('/participation')}>
+          {/* <Link href="/participation" className={getLinkStyle('/participation')}>
             <FaHandsHelping className="text-lg" />
             <span>Participate</span>
-          </Link>
+          </Link> */}
           {session?.user?.isAdmin && (
             <Link href="/admin" className={getLinkStyle('/admin')}>
               <FaShieldAlt className="text-lg" />

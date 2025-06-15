@@ -1,6 +1,6 @@
 import Hero from '@/components/layout/Hero';
 import { Button } from '@/components/ui/Button';
-import Link from 'next/link';
+// import Link from 'next/link';
 import {
   FaCheckCircle,
   FaUsers,
@@ -108,9 +108,9 @@ export default function HomePage() {
             </div>
 
             <div className="pt-4">
-              <Button asChild className="bg-primary hover:bg-primary/90 text-white">
+              {/* <Button asChild className="bg-primary hover:bg-primary/90 text-white">
                 <Link href="/participation">Participate Now</Link>
-              </Button>
+              </Button> */}
             </div>
           </div>
         </div>
@@ -192,7 +192,7 @@ export default function HomePage() {
 
           <div className="text-center mt-10">
             <Button asChild className="bg-primary hover:bg-primary/90 text-white">
-              <Link href="/activities">View All Activities</Link>
+              {/* <Link href="/activities">View All Activities</Link> */}
             </Button>
           </div>
         </div>

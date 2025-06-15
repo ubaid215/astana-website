@@ -576,7 +576,7 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-md p-6">
+          {/* <div className="bg-white rounded-lg shadow-md p-6">
             <h2 className="text-xl font-semibold text-secondary mb-4">Payment Account Details</h2>
             <div className="space-y-4">
               <div className="p-4 bg-green-50 rounded-lg border border-green-200">
@@ -598,7 +598,7 @@ export default function ProfilePage() {
                 </div>
               </div>
             </div>
-          </div>
+          </div> */}
 
           <div className="bg-white rounded-lg shadow-md p-6">
             <h2 className="text-xl font-semibold text-secondary mb-4">Account Details</h2>
