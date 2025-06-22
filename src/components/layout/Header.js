@@ -2,24 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useSession, signOut } from 'next-auth/react';
-import { Button } from '@/components/ui/Button';
 import { usePathname } from 'next/navigation';
-import { 
-  FaSignOutAlt, 
-  FaUser, 
-  FaBars, 
-  FaTimes, 
-  FaHome, 
-  FaInfoCircle, 
-  FaSignInAlt, 
-  FaUserPlus, 
-  FaHandsHelping,
-  FaShieldAlt
-} from 'react-icons/fa';
+import { FaHome, FaShoppingCart, FaHeadphones, FaBook, FaImage, FaPlayCircle, FaInfoCircle, FaEnvelope, FaBars, FaTimes } from 'react-icons/fa';
 
 export default function Header() {
-  const { data: session, status } = useSession();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const pathname = usePathname();
@@ -32,7 +18,7 @@ export default function Header() {
     setIsMenuOpen(!isMenuOpen);
   };
 
-  // Close menu when clicking outside
+  // Handle resize for mobile detection
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth < 768);
@@ -41,104 +27,76 @@ export default function Header() {
       }
     };
 
-    // Initial check
     handleResize();
-
-    // Add event listener
     window.addEventListener('resize', handleResize);
-
-    // Cleanup
-    return () => {
-      window.removeEventListener('resize', handleResize);
-    };
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Common link style function
-  const getLinkStyle = (path) => {
-    return `transition-all duration-300 flex items-center gap-2 py-2 ${
-      isActive(path)
-        ? 'text-yellow-400 border-b-2 border-yellow-400 font-bold'
-        : 'hover:text-yellow-200'
-    }`;
-  };
-
-  const navLinks = (
-    <>
-      <Link href="/" className={getLinkStyle('/')}>
-        <FaHome className="text-lg" />
-        <span>Home</span>
-      </Link>
-      <Link href="/about" className={getLinkStyle('/about')}>
-        <FaInfoCircle className="text-lg" />
-        <span>About</span>
-      </Link>
-      {status === 'authenticated' ? (
-        <>
-          <Link href="/profile" className={getLinkStyle('/profile')}>
-            <FaUser className="text-lg" />
-            <span>Profile</span>
-          </Link>
-          {/* <Link href="/participation" className={getLinkStyle('/participation')}>
-            <FaHandsHelping className="text-lg" />
-            <span>Participate</span>
-          </Link> */}
-          {session?.user?.isAdmin && (
-            <Link href="/admin" className={getLinkStyle('/admin')}>
-              <FaShieldAlt className="text-lg" />
-              <span>Admin</span>
-            </Link>
-          )}
-          <Button
-            variant="ghost"
-            className="flex items-center space-x-2 text-white hover:bg-gray-700"
-            onClick={() => {
-              signOut({ callbackUrl: '/' });
-              setIsMenuOpen(false);
-            }}
-          >
-            <FaSignOutAlt className="text-lg" />
-            <span>Sign Out</span>
-          </Button>
-        </>
-      ) : (
-        <>
-          <Link href="/login" className={getLinkStyle('/login')}>
-            <FaSignInAlt className="text-lg" />
-            <span>Login</span>
-          </Link>
-          <Link href="/register" className={getLinkStyle('/register')}>
-            <FaUserPlus className="text-lg" />
-            <span>Sign Up</span>
-          </Link>
-        </>
-      )}
-    </>
-  );
+  // Navigation links with icons
+  const navLinks = [
+    { path: '/', name: 'Home', icon: FaHome },
+    { path: '/shop', name: 'Shop', icon: FaShoppingCart },
+    { path: '/audio-lectures', name: 'Audio Lectures', icon: FaHeadphones },
+    { path: '/digital-books', name: 'Digital Books', icon: FaBook },
+    { path: '/islamic-art', name: 'Islamic Art', icon: FaImage },
+    { path: '/courses', name: 'Courses (Coming Soon)', icon: FaPlayCircle },
+    { path: '/about', name: 'About Us', icon: FaInfoCircle },
+    { path: '/contact', name: 'Contact', icon: FaEnvelope },
+  ];
 
   return (
-    <header className="bg-primary text-white py-4 px-6 shadow-md relative">
-      <div className="container mx-auto flex justify-between items-center">
-        <Link href="/" className="text-2xl font-bold">Khanqah Aliya Murshidabad</Link>
-        
+    <header className="sticky top-0 z-50 bg-white shadow-md py-4 px-4 sm:px-6 lg:px-8 font-['Cairo']">
+      <div className="max-w-7xl mx-auto flex justify-between items-center">
+        {/* Logo */}
+        <Link href="/" className="text-2xl font-bold text-green-800 flex items-center gap-2">
+          <FaBook className="text-green-600" />
+          Khanqah Saifia
+        </Link>
+
         {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center space-x-6">
-          {navLinks}
+        <nav className="hidden md:flex items-center gap-6">
+          {navLinks.map((link) => (
+            <Link
+              key={link.path}
+              href={link.path}
+              className={`flex items-center gap-2 text-gray-700 transition-all duration-300 ${
+                isActive(link.path) ? 'text-green-600 font-semibold border-b-2 border-green-600' : 'hover:text-green-600'
+              }`}
+            >
+              <link.icon className="text-lg" />
+              <span>{link.name}</span>
+            </Link>
+          ))}
         </nav>
-        
+
         {/* Mobile Menu Button */}
-        <button 
-          className="md:hidden text-white text-2xl focus:outline-none"
+        <button
+          className="md:hidden text-green-600 text-2xl focus:outline-none"
           onClick={toggleMenu}
           aria-label="Toggle menu"
         >
           {isMenuOpen ? <FaTimes /> : <FaBars />}
         </button>
       </div>
-      
+
       {/* Mobile Navigation */}
       {isMobile && isMenuOpen && (
-        <nav className="absolute top-full left-0 right-0 bg-primary shadow-lg z-50 flex flex-col space-y-4 py-4 px-6 md:hidden animate-fadeIn">
-          {navLinks}
+        <nav className="md:hidden bg-white shadow-lg py-4 px-6 mt-2 rounded-lg animate-fadeIn">
+          <div className="flex flex-col gap-4">
+            {navLinks.map((link) => (
+              <Link
+                key={link.path}
+                href={link.path}
+                className={`flex items-center gap-2 text-gray-700 transition-all duration-300 ${
+                  isActive(link.path) ? 'text-green-600 font-semibold' : 'hover:text-green-600'
+                }`}
+                onClick={() => setIsMenuOpen(false)}
+              >
+                <link.icon className="text-lg" />
+                <span>{link.name}</span>
+              </Link>
+            ))}
+          </div>
         </nav>
       )}
     </header>
